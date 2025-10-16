@@ -1,0 +1,5 @@
+{
+    "stdcell_spice": "stdcell.cdl",
+    "stdcell_liberty": "stdcell.lib",
+    "leafcell_spice": "leafcell.cdl"
+}
