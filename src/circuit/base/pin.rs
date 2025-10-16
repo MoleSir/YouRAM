@@ -2,6 +2,7 @@ use crate::circuit::{ShrString, Shr};
 
 use super::{Net, Port};
 
+#[derive(Debug)]
 pub struct Pin {
     pub name: ShrString,
     pub net: Option<Shr<Net>>,

@@ -1,6 +1,7 @@
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+#[derive(Debug)]
 pub struct Shr<T: ?Sized> {
     inner: Arc<RwLock<T>>,
 }

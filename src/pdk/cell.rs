@@ -1,8 +1,7 @@
 use reda_lib::model::{LibCell, LibExpr, LibPinDirection};
 use reda_sp::Spice;
-use crate::circuit::{Bitcell, DriveStrength, Port, PortDirection, Stdcell, StdcellKind, BITCELL_NAME};
+use crate::circuit::{Bitcell, ColumnTriGate, DriveStrength, Port, PortDirection, SenseAmp, Stdcell, StdcellKind, WriteDriver, BITCELL_NAME, COLUMN_TRI_GATE_NAME, SENSE_AMP_NAME, WRITE_DRIVER_NAME};
 use super::{Pdk, PdkError};
-
 
 impl Pdk {
     pub fn extract_bitcell(spice: &Spice) -> Result<Bitcell, PdkError> {
@@ -23,9 +22,71 @@ impl Pdk {
 
         Ok(Bitcell::new(bl, br, wl, vdd, gnd, subckt))
     }
+
+    pub fn extract_sense_amp(spice: &Spice) -> Result<SenseAmp, PdkError> {
+        let subckt = spice.subckts.iter()
+            .find(|s| s.name == SENSE_AMP_NAME)
+            .ok_or_else(|| PdkError::UnexitLeafCell(SENSE_AMP_NAME))?
+            .clone();
+
+        if subckt.ports.len() != 6 {
+            return Err(PdkError::UnmatchLeafCellPinSize(6, subckt.ports.len(), SENSE_AMP_NAME));
+        }
+
+        let bl   = Port::new(subckt.ports[0].clone(), PortDirection::InOut);
+        let br   = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
+        let dout = Port::new(subckt.ports[2].clone(), PortDirection::Output);
+        let en   = Port::new(subckt.ports[3].clone(), PortDirection::Input);
+        let vdd  = Port::new(subckt.ports[4].clone(), PortDirection::Source);
+        let gnd  = Port::new(subckt.ports[5].clone(), PortDirection::Source);
+
+        Ok(SenseAmp::new(bl, br, dout, en, vdd, gnd, subckt))
+    }
+
+    pub fn extract_write_driver(spice: &Spice) -> Result<WriteDriver, PdkError> {
+        let subckt = spice.subckts.iter()
+            .find(|s| s.name == WRITE_DRIVER_NAME)
+            .ok_or_else(|| PdkError::UnexitLeafCell(WRITE_DRIVER_NAME))?
+            .clone();
+
+        if subckt.ports.len() != 6 {
+            return Err(PdkError::UnmatchLeafCellPinSize(6, subckt.ports.len(), WRITE_DRIVER_NAME));
+        }
+
+        let din = Port::new(subckt.ports[0].clone(), PortDirection::Input);
+        let bl  = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
+        let br  = Port::new(subckt.ports[2].clone(), PortDirection::InOut);
+        let en  = Port::new(subckt.ports[3].clone(), PortDirection::Input);
+        let vdd = Port::new(subckt.ports[4].clone(), PortDirection::Source);
+        let gnd = Port::new(subckt.ports[5].clone(), PortDirection::Source);
+
+        Ok(WriteDriver::new(din, bl, br, en, vdd, gnd, subckt))
+    }
+
+    pub fn extract_column_trigate(spice: &Spice) -> Result<ColumnTriGate, PdkError> {
+        let subckt = spice.subckts.iter()
+            .find(|s| s.name == COLUMN_TRI_GATE_NAME)
+            .ok_or_else(|| PdkError::UnexitLeafCell(COLUMN_TRI_GATE_NAME))?
+            .clone();
+
+        if subckt.ports.len() != 7 {
+            return Err(PdkError::UnmatchLeafCellPinSize(7, subckt.ports.len(), COLUMN_TRI_GATE_NAME));
+        }
+
+        let bl    = Port::new(subckt.ports[0].clone(), PortDirection::InOut);
+        let br    = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
+        let bl_o  = Port::new(subckt.ports[2].clone(), PortDirection::InOut);
+        let br_o  = Port::new(subckt.ports[3].clone(), PortDirection::InOut);
+        let sel   = Port::new(subckt.ports[4].clone(), PortDirection::Input);
+        let vdd   = Port::new(subckt.ports[5].clone(), PortDirection::Source);
+        let gnd   = Port::new(subckt.ports[6].clone(), PortDirection::Source);
+
+        Ok(ColumnTriGate::new(bl, br, bl_o, br_o, sel, vdd, gnd, subckt))
+    }
 }
 
 impl Pdk {
+    // TODO: better way to extract stdcell!
     pub fn extract_stdcell(cell: &LibCell, spice: &Spice) -> Option<Stdcell> {
         // 1. 根据输出 pin function 判断类型
         if cell.output_pins().count() != 1 {
@@ -56,10 +117,14 @@ impl Pdk {
             }
         }
 
+        if kind == StdcellKind::Inv && ports.len() != 4 {
+            return None;
+        }
+
         let drive_strength = DriveStrength::try_from_cell(cell)?;
 
         Some(Stdcell {
-            name: cell.name.clone(),
+            name: cell.name.clone().into(),
             drive_strength,
             kind,
             ports,

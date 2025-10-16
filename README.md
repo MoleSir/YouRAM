@@ -1,6 +1,6 @@
 # YouRAM
 
-Your RAM: An open source sram compiler.
+Your RAM: An open-source static random access memory (SRAM) compiler.
 
 
 ## LICENSE

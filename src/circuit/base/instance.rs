@@ -1,7 +1,7 @@
 use crate::circuit::{Circuit, CircuitError, Design, Shr, ShrString, Pin};
-
 use super::Net;
 
+#[derive(Debug)]
 pub struct Instance {
     pub name: ShrString,
     pub template_circuit: Shr<Circuit>,

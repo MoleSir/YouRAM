@@ -13,6 +13,9 @@ pub struct Pdk {
     pub config: PdkConfig,
     pub stdcells: HashMap<(StdcellKind, DriveStrength), Shr<Circuit>>,
     pub bitcell: Shr<Circuit>,
+    pub sense_amp: Shr<Circuit>,
+    pub write_driver: Shr<Circuit>,
+    pub column_tri_gate: Shr<Circuit>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -55,6 +58,18 @@ impl Pdk {
     pub fn get_bitcell(&self) -> Shr<Circuit> {
         self.bitcell.clone()
     }
+
+    pub fn get_sense_amp(&self) -> Shr<Circuit> {
+        self.sense_amp.clone()
+    }
+
+    pub fn get_write_driver(&self) -> Shr<Circuit> {
+        self.write_driver.clone()
+    }
+
+    pub fn get_column_tri_gate(&self) -> Shr<Circuit> {
+        self.column_tri_gate.clone()
+    }
 }
 
 impl Pdk {
@@ -85,11 +100,20 @@ impl Pdk {
         // extract bitcell
         let bitcell 
             = Shr::new(Circuit::Leafcell(Self::extract_bitcell(&leafcell_spice).context("extract bitcell")?.into()));
+        let sense_amp
+            = Shr::new(Circuit::Leafcell(Self::extract_sense_amp(&leafcell_spice).context("extract sens_amp")?.into()));
+        let write_driver
+            = Shr::new(Circuit::Leafcell(Self::extract_write_driver(&leafcell_spice).context("extract write_driver")?.into()));
+        let column_tri_gate
+            = Shr::new(Circuit::Leafcell(Self::extract_column_trigate(&leafcell_spice).context("extract column_trigate")?.into()));    
 
         Ok(Self {
             config,
             stdcells,
-            bitcell
+            bitcell,
+            sense_amp,
+            write_driver,
+            column_tri_gate,
         })
     }
 }

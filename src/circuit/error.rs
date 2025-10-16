@@ -1,3 +1,5 @@
+use super::{DriveStrength, StdcellKind};
+
 #[derive(Debug, thiserror::Error)]
 pub enum CircuitError {
     #[error("port '{0}' already exit")]
@@ -24,6 +26,12 @@ pub enum CircuitError {
     #[error("no exit instance {0} in module {1}")]
     InstanceNotFound(String, String),
 
+    #[error("no exit stdcell with({0}, {1})")]
+    StdcellNotFound(StdcellKind, DriveStrength),
+
+    #[error("stdcell input order {0} port out of range ")]
+    StdcellInputPortOutOfRange(usize),
+
     #[error("{0}")]
     Messgae(String),
 }
@@ -49,4 +57,23 @@ macro_rules! invalid_arg {
     ($fmt:expr, $($arg:tt)*) => {
         Err($crate::circuit::CircuitError::InvalidArguments(format!($fmt, $($arg)*).into()))?
     };
+}
+
+#[macro_export]
+macro_rules! check_arg {
+    ($cond:expr, $msg:literal $(,)?) => {
+        if !$cond {
+            Err($crate::circuit::CircuitError::InvalidArguments(format!($msg).into()))?
+        }
+    };
+    ($cond:expr, $msg:literal $(,)?) => {
+        if !$cond {
+            Err($crate::circuit::CircuitError::InvalidArguments(format!($err).into()))?
+        }
+    };
+    ($cond:expr, $fmt:expr, $($arg:tt)*) => {
+        if !$cond {
+            Err($crate::circuit::CircuitError::InvalidArguments(format!($fmt, $($arg)*).into()))?
+        }
+    }
 }
