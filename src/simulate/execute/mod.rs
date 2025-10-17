@@ -2,9 +2,9 @@ mod ngspice;
 mod spectre;
 pub use ngspice::*;
 pub use spectre::*;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use crate::YouRAMResult;
 use super::error::SimulateError;
 
 pub enum Executer {
@@ -13,7 +13,7 @@ pub enum Executer {
 }
 
 impl Executer {
-    pub fn from(execute: impl AsRef<str>) -> anyhow::Result<Self> {
+    pub fn from(execute: impl AsRef<str>) -> YouRAMResult<Self> {
     let execute = execute.as_ref();
         match execute {
             "ngspice" => Ok(Self::Ngspice),
@@ -22,7 +22,7 @@ impl Executer {
         }
     }
 
-    pub fn execute(&self, sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
+    pub fn execute(&self, sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<PathBuf> {
         match self {
             Self::Ngspice => NgSpice::execute(sim_filepath, temp_folder),
             Self::Spectre => Spectre::execute(sim_filepath, temp_folder),
@@ -32,10 +32,10 @@ impl Executer {
 
 pub trait Execute {
     /// Return the simulate command to execute 
-    fn simulate_command(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> anyhow::Result<String>;
+    fn simulate_command(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<String>;
 
     /// Return the meas filepath after simulate
-    fn meas_result_filepath(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
+    fn meas_result_filepath(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<PathBuf> {
         let sim_filepath = sim_filepath.as_ref();
         let temp_folder = temp_folder.as_ref().to_path_buf();
 
@@ -48,7 +48,7 @@ pub trait Execute {
         Ok(temp_folder.join(filename)) 
     }
 
-    fn execute(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
+    fn execute(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<PathBuf> {
         let sim_filepath = sim_filepath.as_ref();
         let temp_folder = temp_folder.as_ref();
 

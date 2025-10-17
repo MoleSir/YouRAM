@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use anyhow::Context;
 use reda_unit::Number;
+use crate::{ErrorContext, YouRAMResult};
+
 use super::{Executer, Meas, SimulateError};
 
 pub struct Simulator {
@@ -13,7 +14,7 @@ pub struct Simulator {
 }
 
 impl Simulator {
-    pub fn create<P: AsRef<Path>>(simulate_path: P) -> anyhow::Result<Self> {
+    pub fn create<P: AsRef<Path>>(simulate_path: P) -> YouRAMResult<Self> {
         let simulate_path = simulate_path.as_ref();
         let file = File::create(simulate_path)?;
         Ok(Self {
@@ -25,12 +26,12 @@ impl Simulator {
 }
 
 impl Simulator {
-    pub fn simulate(&mut self, exceuter: Executer, temp_folder: impl AsRef<Path>) -> anyhow::Result<HashMap<String, Number>> {
+    pub fn simulate(&mut self, exceuter: Executer, temp_folder: impl AsRef<Path>) -> YouRAMResult<HashMap<String, Number>> {
         let result_path = exceuter.execute(&self.simulate_path, temp_folder).context("Execute simualte")?;
         self.get_meas_results(&result_path).context("Get meas result")
     }   
 
-    fn get_meas_results(&mut self, result_path: impl AsRef<Path>) -> anyhow::Result<HashMap<String, Number>> {
+    fn get_meas_results(&mut self, result_path: impl AsRef<Path>) -> YouRAMResult<HashMap<String, Number>> {
         self.file.flush()?;
         let result_path = result_path.as_ref();
         let content = std::fs::read_to_string(result_path).context(format!("read result file '{:?}'", result_path))?;
@@ -46,32 +47,32 @@ impl Simulator {
 }
 
 impl Simulator {
-    pub fn write_content(&mut self, content: impl AsRef<str>) -> anyhow::Result<()> {
+    pub fn write_content(&mut self, content: impl AsRef<str>) -> YouRAMResult<()> {
         write!(self.file, "{}", content.as_ref())?;
         Ok(())
     }
 
-    pub fn write_char(&mut self, ch: char) -> anyhow::Result<()> {
+    pub fn write_char(&mut self, ch: char) -> YouRAMResult<()> {
         write!(self.file, "{}", ch)?;
         Ok(())
     }
 
-    pub fn write_include<P: AsRef<Path>>(&mut self, path: P) -> anyhow::Result<()> {
+    pub fn write_include<P: AsRef<Path>>(&mut self, path: P) -> YouRAMResult<()> {
         writeln!(self.file, ".include {}", path.as_ref().display())?;
         Ok(())
     }
 
-    pub fn write_end(&mut self) -> anyhow::Result<()> {
+    pub fn write_end(&mut self) -> YouRAMResult<()> {
         writeln!(self.file, ".end")?;
         Ok(())
     }
 
-    pub fn write_comment(&mut self, comment: impl AsRef<str>) -> anyhow::Result<()> {
+    pub fn write_comment(&mut self, comment: impl AsRef<str>) -> YouRAMResult<()> {
         writeln!(self.file, "* {}", comment.as_ref())?;
         Ok(())
     }
 
-    pub fn write_temperature(&mut self, temp: Number) -> anyhow::Result<()> {
+    pub fn write_temperature(&mut self, temp: Number) -> YouRAMResult<()> {
         writeln!(self.file, ".TEMP {}", temp)?;
         Ok(())
     }
@@ -81,7 +82,7 @@ impl Simulator {
         module_name: impl AsRef<str>,
         instance_name: impl AsRef<str>,
         nets: &[impl AsRef<str>],
-    ) -> anyhow::Result<()> {
+    ) -> YouRAMResult<()> {
         write!(self.file, "X{}", instance_name.as_ref())?;
         for net in nets {
             write!(self.file, " {}", net.as_ref())?;
@@ -96,7 +97,7 @@ impl Simulator {
         net_name: impl AsRef<str>,
         times: &[Number],
         voltages: &[Number],
-    ) -> anyhow::Result<()> {
+    ) -> YouRAMResult<()> {
         if times.len() != voltages.len() {
             return Err(SimulateError::TimesAndVoltageUnmatch(times.len(), voltages.len()))?;
         }
@@ -117,7 +118,7 @@ impl Simulator {
         times: &[Number],
         voltages: &[Number],
         slew: Number,
-    ) -> anyhow::Result<()> {
+    ) -> YouRAMResult<()> {
         if times.len() != voltages.len() {
             return Err(SimulateError::TimesAndVoltageUnmatch(times.len(), voltages.len()))?;
         }
@@ -150,7 +151,7 @@ impl Simulator {
         fall: Number,
         width: Number,
         period: Number,
-    ) -> anyhow::Result<()> {
+    ) -> YouRAMResult<()> {
         writeln!(
             self.file,
             "V{} {} 0 PULSE({} {} {} {} {} {} {})",
@@ -169,7 +170,7 @@ impl Simulator {
         voltage_name: impl AsRef<str>,
         net_name: impl AsRef<str>,
         voltage: Number,
-    ) -> anyhow::Result<()> {
+    ) -> YouRAMResult<()> {
         writeln!(self.file, "V{} {} 0 {}", voltage_name.as_ref(), net_name.as_ref(), voltage)?;
         Ok(())
     }
@@ -180,17 +181,17 @@ impl Simulator {
         n1: impl AsRef<str>,
         n2: impl AsRef<str>,
         value: Number,
-    ) -> anyhow::Result<()> {
+    ) -> YouRAMResult<()> {
         writeln!(self.file, "C{} {} {} {}", name.as_ref(), n1.as_ref(), n2.as_ref(), value)?;
         Ok(())
     }
 
-    pub fn write_trans(&mut self, step: Number, start: Number, end: Number) -> anyhow::Result<()> {
+    pub fn write_trans(&mut self, step: Number, start: Number, end: Number) -> YouRAMResult<()> {
         writeln!(self.file, ".TRAN {} {} {}", step, end, start)?;
         Ok(())
     }
 
-    pub fn write_measurement(&mut self, meas: Box<dyn Meas>) -> anyhow::Result<()> {
+    pub fn write_measurement(&mut self, meas: Box<dyn Meas>) -> YouRAMResult<()> {
         meas.write_command(&mut self.file)?;
         self.measurements.push(meas);
         Ok(())

@@ -6,9 +6,8 @@ use super::Primitive;
 pub const BITCELL_NAME: &'static str = "bitcell";
 pub const SENSE_AMP_NAME: &'static str = "sense_amp";
 pub const WRITE_DRIVER_NAME: &'static str = "write_driver";
-pub const COLUMN_TRI_GATE_NAME: &'static str = "column_tri_gate";
+pub const COLUMN_TRI_GATE_NAME: &'static str = "column_trigate";
 
-#[derive(Debug)]
 pub enum Leafcell {
     Bitcell(Bitcell),
     SenseAmp(SenseAmp),
@@ -16,7 +15,6 @@ pub enum Leafcell {
     ColumnTriGate(ColumnTriGate),
 }
 
-#[derive(Debug)]
 pub struct Bitcell {
     pub bitline: Shr<Port>,
     pub bitline_bar: Shr<Port>,
@@ -28,7 +26,6 @@ pub struct Bitcell {
     pub netlist: Subckt,
 }
 
-#[derive(Debug)]
 pub struct SenseAmp {
     pub bitline: Shr<Port>,
     pub bitline_bar: Shr<Port>,
@@ -41,7 +38,6 @@ pub struct SenseAmp {
     pub netlist: Subckt,
 }
 
-#[derive(Debug)]
 pub struct WriteDriver {
     pub data_input: Shr<Port>,
     pub bitline: Shr<Port>,
@@ -54,7 +50,6 @@ pub struct WriteDriver {
     pub netlist: Subckt,
 }
 
-#[derive(Debug)]
 pub struct ColumnTriGate {
     pub bitline: Shr<Port>,
     pub bitline_bar: Shr<Port>,

@@ -1,20 +1,27 @@
-use crate::circuit::{Circuit, CircuitError, Design, Shr, ShrString, Pin};
+use crate::circuit::{CircuitError, Design, Pin, Shr, ShrCircuit, ShrString};
 use super::Net;
 
-#[derive(Debug)]
 pub struct Instance {
     pub name: ShrString,
-    pub template_circuit: Shr<Circuit>,
+    pub template_circuit: ShrCircuit,
     pub pins: Vec<Shr<Pin>>,
 }
 
 impl Instance {
-    pub fn new<S: Into<ShrString>>(name: S, template_circuit: Shr<Circuit>) -> Shr<Instance> {
+    pub fn new<S, C>(name: S, template_circuit: Shr<C>) -> Shr<Instance> 
+    where 
+        S: Into<ShrString>,
+        C: Design,
+        Shr<C>: Into<ShrCircuit>,
+    {
         let pins = template_circuit.read().ports().iter().map(|port| {
             Pin::new(port.read().name.clone(), port.clone())
         })
         .collect();
 
+        let template_circuit: ShrCircuit = template_circuit.into();
+        let name: ShrString = name.into();
+        
         Shr::new ( Self { name: name.into(), template_circuit, pins } )
     }
 

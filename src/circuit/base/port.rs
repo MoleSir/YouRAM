@@ -9,7 +9,6 @@ pub enum PortDirection {
     Source,
 }
 
-#[derive(Debug)]
 pub struct Port {
     pub name: ShrString,
     pub direction: PortDirection,

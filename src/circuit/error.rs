@@ -11,6 +11,9 @@ pub enum CircuitError {
     #[error("unmatch pin size '{0}' and net size '{1}'")]
     PinSizeUnmatch(usize, usize),
 
+    #[error("expect '{0}' input but got '{1}'")]
+    StdcellInputPinSizeUnmatch(usize, usize),
+
     #[error("instance '{0}' have not been connected")]
     InstanceNotConnected(String),
 

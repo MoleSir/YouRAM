@@ -1,5 +1,5 @@
 
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::{hash::{Hash, Hasher}, ptr, sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard}};
 
 #[derive(Debug)]
 pub struct Shr<T: ?Sized> {
@@ -29,5 +29,19 @@ impl<T: ?Sized> Clone for Shr<T> {
         Shr {
             inner: Arc::clone(&self.inner),
         }
+    }
+}
+
+impl<T: ?Sized> PartialEq for Shr<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl<T: ?Sized> Eq for Shr<T> {}
+
+impl<T: ?Sized> Hash for Shr<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        ptr::hash(Arc::as_ptr(&self.inner), state);
     }
 }

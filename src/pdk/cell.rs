@@ -103,15 +103,32 @@ impl Pdk {
 
         // 3. 构建端口列表
         let mut ports = vec![];
-        for port_name in subckt.ports.iter() {
+        let mut input_port_indexs = vec![];
+        let mut output_port_index = None;
+        let mut vdd_port_index = None;
+        let mut gnd_port_index = None;
+
+        for (port_index, port_name) in subckt.ports.iter().enumerate() {
             if let Some(pin) = cell.get_pin(&port_name) {
                 let direction = match pin.direction {
-                    LibPinDirection::Input => PortDirection::Input,
-                    LibPinDirection::Output => PortDirection::Output,
+                    LibPinDirection::Input => {
+                        input_port_indexs.push(port_index);
+                        PortDirection::Input
+                    }
+                    LibPinDirection::Output => {
+                        output_port_index = Some(port_index);
+                        PortDirection::Output
+                    }
                     _ => panic!(),
                 };
                 ports.push(Port::new(port_name.clone(), direction));
             } else if let Some(_) = cell.get_pg_pin(&port_name) {
+                // TODO, how to recg vdd or gnd?
+                if vdd_port_index.is_none() {
+                    vdd_port_index = Some(port_index);
+                } else {
+                    gnd_port_index = Some(port_index);
+                }
                 ports.push(Port::new(port_name.clone(), PortDirection::Source));
                 
             }
@@ -128,6 +145,10 @@ impl Pdk {
             drive_strength,
             kind,
             ports,
+            input_port_indexs,
+            output_port_index: output_port_index?,
+            vdd_port_index: vdd_port_index?,
+            gnd_port_index: gnd_port_index?,
             netlist: subckt,
         })
     }

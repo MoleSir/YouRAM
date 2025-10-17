@@ -1,76 +1,72 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::ops::Deref;
 use std::path::Path;
-use anyhow::Context;
 use reda_sp::ToSpice;
 use tracing::{debug, info};
-use crate::circuit::{Circuit, CircuitError, Design, Primitive, Shr, ShrString};
+use crate::circuit::{CircuitError, Design, Primitive, ShrModule, ShrString};
+use crate::YouRAMResult;
 
-pub fn write_spice<P: AsRef<Path>>(circuit: Shr<Circuit>, path: P) -> anyhow::Result<()> {
+pub fn write_spice<P: AsRef<Path>>(module: ShrModule, path: P) -> YouRAMResult<()> {
     let path = path.as_ref();
-    info!("write circuit {} to {:?}", circuit.read().name(), path);
+    info!("write circuit {} to {:?}", module.read().name(), path);
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
     let mut exported = HashSet::new();
-    write_spice_recursive(&mut writer, &circuit, &mut exported).context(format!("export {}", circuit.read().name()))?;
+    write_spice_recursive(&mut writer, &module, &mut exported)?;
     Ok(())
 }
 
 fn write_spice_recursive<W: Write>(
     writer: &mut W,
-    circuit: &Shr<Circuit>,
+    module: &ShrModule,
     exported: &mut HashSet<ShrString>,
-) -> anyhow::Result<()> {
-    let name = circuit.read().name();
-    if !exported.insert(name.clone()) {
-        return Ok(()); 
+) -> YouRAMResult<()> {
+    let module_ref = module.read();
+    debug!("write module {}", module_ref.name());
+
+    // write sub cell
+    for leafcell in module_ref.sub_leafcells() {
+        if exported.insert(leafcell.read().name()) {
+            writeln!(writer, "{}", leafcell.read().netlist().to_spice())?;
+            write!(writer, "\n\n")?;
+        }            
+    }
+    for stdcell in module_ref.sub_stdcells() {
+        if exported.insert(stdcell.read().name()) {
+            writeln!(writer, "{}", stdcell.read().netlist().to_spice())?;
+            write!(writer, "\n\n")?;
+        }   
+    }
+    for sub_module in module_ref.sub_modules() {
+        if exported.insert(sub_module.read().name()) {
+            write_spice_recursive(writer, sub_module, exported)?;
+            write!(writer, "\n\n")?;
+        }
     }
 
-    match circuit.read().deref() {
-        Circuit::Module(module) => {
-            debug!("write module {}", name);
-            for sub in module.circuits() {
-                write_spice_recursive(writer, sub, exported).context(format!("export {}", circuit.read().name()))?;
+    // .SUBCKT header
+    let ports = module_ref.ports();
+    let port_names: Vec<_> = ports.iter().map(|p| p.read().name.to_string()).collect();
+    writeln!(writer, ".SUBCKT {} {}", module_ref.name(), port_names.join(" "))?;
+
+    // Instance
+    for inst in module_ref.instances() {            
+        let inst = inst.read();
+        
+        let mut pin_nets = Vec::new();
+        for pin in inst.pins.iter() {
+            match &pin.read().net {
+                Some(net) => pin_nets.push(net.read().name.to_string()),
+                None => return Err(CircuitError::InstanceNotConnected(inst.name.to_string()))?,
             }
-
-            // .SUBCKT header
-            let ports = module.ports();
-            let port_names: Vec<_> = ports.iter().map(|p| p.read().name.to_string()).collect();
-            writeln!(writer, ".SUBCKT {} {}", module.name(), port_names.join(" "))?;
-
-            // Instance
-            for inst in module.instances() {            
-                let inst = inst.read();
-                
-                let mut pin_nets = Vec::new();
-                for pin in inst.pins.iter() {
-                    match &pin.read().net {
-                        Some(net) => pin_nets.push(net.read().name.to_string()),
-                        None => return Err(CircuitError::InstanceNotConnected(inst.name.to_string()))?,
-                    }
-                }
-
-                let subckt_name = inst.template_circuit.read().name();
-                writeln!(writer, "X{} {} {}", inst.name, pin_nets.join(" "), subckt_name)?;
-            }
-
-            writeln!(writer, ".ENDS {}\n", module.name())?;
         }
-        Circuit::Stdcell(stdcell) => {
-            debug!("write stdcell {}", name);
-            let spice = stdcell.netlist.to_spice();
-            writer.write_all(spice.as_bytes())?;
-            writer.write_all("\n\n".as_bytes())?;
-        }
-        Circuit::Leafcell(leafcell) => {
-            debug!("write leafcell {}", name);
-            let spice = leafcell.netlist().to_spice();
-            writer.write_all(spice.as_bytes())?;
-            writer.write_all("\n\n".as_bytes())?;
-        }
+
+        let subckt_name = inst.template_circuit.name();
+        writeln!(writer, "X{} {} {}", inst.name, pin_nets.join(" "), subckt_name)?;
     }
+
+    writeln!(writer, ".ENDS {}", module_ref.name())?;
 
     Ok(())
 }

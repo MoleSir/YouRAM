@@ -1,6 +1,5 @@
-use anyhow::Context;
 use youram_macro::module;
-use crate::{check_arg, circuit::{CircuitFactory, DriveStrength, StdcellKind, StdcellPort}, format_shr};
+use crate::{check_arg, circuit::{CircuitFactory, DriveStrength, StdcellKind}, format_shr, ErrorContext, YouRAMResult};
 
 const MAX_SIMPLE_INPUT_SIZE: usize = 4;
 const MIN_INPUT_SIZE: usize = 1;
@@ -37,7 +36,7 @@ impl DecoderArg {
 }
 
 impl Decoder {
-    pub fn build(&mut self, factory: &mut CircuitFactory) -> anyhow::Result<()> {
+    pub fn build(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
         check_arg!(self.args.input_size >= MIN_INPUT_SIZE, "Input size '{}' < {}", self.args.input_size, MIN_INPUT_SIZE);
         check_arg!(self.args.input_size <= MAX_INPUT_SIZE, "Input size '{}' > {}", self.args.input_size, MAX_INPUT_SIZE);
 
@@ -49,7 +48,7 @@ impl Decoder {
 
     }
 
-    fn build_simple(&mut self, factory: &mut CircuitFactory) -> anyhow::Result<()> {
+    fn build_simple(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
         let inv = self.add_stdcell(StdcellKind::Inv, DriveStrength::X2, factory)?;
         let and = self.add_stdcell(StdcellKind::And(self.args.input_size), DriveStrength::X2, factory)?;
                         
@@ -58,20 +57,14 @@ impl Decoder {
 
         for i in 0..self.args.input_size {
             let inst_name = format!("inv{}", i);
-            let instance = self.add_instance(inst_name.clone(), inv.clone())?;
-            self.connect_instance(
-                instance.clone(), 
-                [
-                    (StdcellPort::Input(0), input_ports[i].clone()),
-                    (StdcellPort::Output, input_ports_bar[i].clone()),
-                    (StdcellPort::Vdd, Self::vdd_pn()),
-                    (StdcellPort::Gnd, Self::gnd_pn()),
-                ].into_iter()
+            self.link_inv_instance(
+                inst_name, inv.clone(), 
+                [input_ports[i].clone(), input_ports_bar[i].clone(), Self::vdd_pn(), Self::gnd_pn()]
             )?;
         } 
 
         for i in 0..self.args.output_size {
-            let mut nets = vec![];
+            let mut input_nets = vec![];
             // 'i' is the AND gate's index. Each AND gate's inputs are [A0/A0_int, A1/A1_int ... An/An_int]
             // There are '_inputSize' inputs, and 'j' is the input port' index.
             // No.'j' bit in 'i' decides the port for Aj is inverted or not.
@@ -80,21 +73,20 @@ impl Decoder {
             // ...
             for j in 0..self.args.input_size {
                 let bit_one = ((i >> j) & 0x1) != 0;
-                nets.push( if bit_one { input_ports[j].clone() } else { input_ports_bar[j].clone() } );   
+                input_nets.push( if bit_one { input_ports[j].clone() } else { input_ports_bar[j].clone() } );   
             }
-            nets.push(Self::output_pn(i));
-            nets.push(Self::vdd_pn());
-            nets.push(Self::gnd_pn());
 
             let inst_name = format!("and{}", i);
-            let instance = self.add_instance(inst_name.clone(), and.clone())?;
-            self.connect_instance_in_order(instance, nets.into_iter())?;
+            self.link_stdcell_instance(
+                inst_name, and.clone(), 
+                input_nets, Self::output_pn(i), Self::vdd_pn(), Self::gnd_pn()
+            )?;
         }
 
         Ok(())
     }
 
-    fn build_componet(&mut self, factory: &mut CircuitFactory) -> anyhow::Result<()> {
+    fn build_componet(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
         let sub_decoders_input_size = self.sub_decoders_input_size();
         let and = self.add_stdcell(StdcellKind::And(sub_decoders_input_size.len()), DriveStrength::X2, factory).context("create and")?;
 
@@ -117,12 +109,12 @@ impl Decoder {
 
             let inst_name = format!("decoder{}", decoder_index);
             let instance = self.add_instance(inst_name.clone(), sub_decoder)?;
-            self.connect_instance_in_order(instance, nets.into_iter())?;
+            self.connect_instance(instance, nets.into_iter())?;
         }
 
         // for output AND
         for and_index in 0..self.args.output_size {
-            let mut pin_to_nets = vec![];
+            let mut input_nets = vec![];
             // For each decoder, get an output line as AND gate's input
             // emmm... this algo is hard to explain, so TODO!!!
             for (decoder_index, &_) in sub_decoders_input_size.iter().enumerate() {
@@ -137,15 +129,12 @@ impl Decoder {
                 }
 
                 let decoder_output_index = (and_index >> prefix_sum) & mask;
-                pin_to_nets.push((StdcellPort::Input(decoder_index), format_shr!("Y_{}_{}", decoder_index, decoder_output_index)));
+                input_nets.push(format_shr!("Y_{}_{}", decoder_index, decoder_output_index));
             }   
 
-            pin_to_nets.push((StdcellPort::Output, Self::output_pn(and_index)));
-            pin_to_nets.push((StdcellPort::Vdd, Self::vdd_pn()));
-            pin_to_nets.push((StdcellPort::Gnd, Self::gnd_pn()));
-
-            let instance = self.add_instance(format!("and{}", and_index), and.clone())?;
-            self.connect_instance(instance, pin_to_nets.into_iter())?;
+            self.link_stdcell_instance(format!("and{}", and_index), and.clone(), 
+                input_nets, Self::output_pn(and_index), Self::vdd_pn(), Self::gnd_pn()
+            )?;
         }
 
         Ok(())

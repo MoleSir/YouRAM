@@ -72,14 +72,14 @@ mout1N2 int4 din gnd gnd nmos_vtg w=180.000000n l=50.000000n
 
 ********************************************************************************
 *                                                                              *
-* Cellname:   column_tri_gate.                                                 *
+* Cellname:   column_trigate.                                                 *
 *                                                                              *
 * Technology: NCSU FreePDK 45nm.                                               *
 * Format:     Cdl.                                                             *
 *                                                                              *
 *                                                                              *
 ********************************************************************************
-.subckt column_tri_gate bl br bl_out br_out sel vdd gnd
+.subckt column_trigate bl br bl_out br_out sel vdd gnd
 * for bl
 M1000 bl sel_bar bl_out vdd pmos_vtg w=180.0n l=50.0n
 M1001 bl sel bl_out gnd nmos_vtg w=90.0n l=50.0n
@@ -89,4 +89,4 @@ M1003 br sel br_out gnd nmos_vtg w=90.0n l=50.0n
 * inv
 Minv_nmos sel_bar sel gnd gnd nmos_vtg w=0.10u l=0.05u
 Minv_pmos sel_bar sel vdd vdd pmos_vtg w=0.20u l=0.05u
-.ends column_tri_gate
+.ends column_trigate

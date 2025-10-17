@@ -14,6 +14,8 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_name = &input.ident;
     let struct_name_scase = struct_name.to_string().to_case(Case::Snake);
     
+    let attrs = &input.attrs;
+
     let user_fields = match &input.fields {
         syn::Fields::Named(fields_named) => &fields_named.named,
         _ => panic!("Module struct must have named fields"),
@@ -90,10 +92,11 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             #user_fields
         }
 
+        #(#attrs)*
         pub type #struct_name = crate::circuit::Module<#arg_struct_name>;
 
         impl crate::circuit::ModuleArg for #arg_struct_name {
-            fn create_module(self, factory: &mut crate::circuit::CircuitFactory) -> anyhow::Result<#struct_name> {
+            fn create_module(self, factory: &mut crate::circuit::CircuitFactory) -> crate::YouRAMResult<#struct_name> {
                 let name = self.module_name();
                 let mut module = #struct_name::new(name, self);
                 #(#add_port_codes)*
@@ -112,6 +115,7 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }.into()
 }
+
 
 fn extract_placeholders(s: &str) -> Vec<String> {
     let re = Regex::new(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}").unwrap();

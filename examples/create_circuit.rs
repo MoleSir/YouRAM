@@ -1,7 +1,7 @@
+#![allow(unused)]
 use std::sync::Arc;
-use anyhow::Context;
 use tracing::Level;
-use youram::{circuit::{BufferArg, CircuitFactory, DecoderArg, DriveStrength}, export, pdk::Pdk};
+use youram::{circuit::{BitcellArrayRecursiveArg, BufferArg, CircuitFactory, ControlLogic, ControlLogicArg, DecoderArg, DriveStrength}, export, pdk::Pdk, ErrorContext};
 
 fn main_result() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -13,9 +13,16 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
 
     let pdk = Arc::new(Pdk::load("./platforms/nangate45").context("load pdk")?);
     let mut factory = CircuitFactory::new(pdk);
-    let _buffer = factory.module(BufferArg { strength: DriveStrength::X1 }).context("create module")?;
-    let _decoder = factory.module(DecoderArg::new(10))?;
-    export::write_spice(_decoder, "./temp/decoder.sp").context("export spice")?;
+
+    // let logic = factory.module(ControlLogicArg::new())?;
+    // export::write_spice(logic, "./temp/logic.sp").context("export spice")?;
+
+    // let decoder = factory.module(DecoderArg::new(10))?;
+    // export::write_spice(decoder, "./temp/decoder.sp").context("export spice")?;
+
+    let array = factory.module(BitcellArrayRecursiveArg::new(256, 256))?;
+    export::write_spice(array, "./temp/bitcellarray.sp").context("export spice")?;
+
     Ok(())
 }
 

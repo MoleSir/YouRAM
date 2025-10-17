@@ -20,14 +20,39 @@ pub enum DriveStrength {
     X1, X2, X4, X8, X16, X32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct StdcellArg {
+    pub kind: StdcellKind,
+    pub strength: DriveStrength,
+}
+
 pub struct Stdcell {
     pub name: ShrString,
+    
     pub drive_strength: DriveStrength,
     pub kind: StdcellKind,
+
     pub ports: Vec<Shr<Port>>,
+    pub input_port_indexs: Vec<usize>,
+    pub output_port_index: usize,
+    pub vdd_port_index: usize,
+    pub gnd_port_index: usize,
+
     pub netlist: Subckt,
 }
+
+// pub struct Stdcell {
+//     pub name: ShrString,
+    
+//     pub drive_strength: DriveStrength,
+//     pub kind: StdcellKind,
+
+//     pub ports: Vec<Shr<Port>>,
+//     pub port_kinds: Vec<StdcellPort>,
+//     pub input_port_size: usize,
+
+//     pub netlist: Subckt,
+// }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum StdcellPort {
@@ -35,6 +60,12 @@ pub enum StdcellPort {
     Output,
     Vdd,
     Gnd,
+}
+
+impl StdcellArg {
+    pub fn new(kind: StdcellKind, strength: DriveStrength) -> Self {
+        Self { kind, strength }
+    }
 }
 
 impl Stdcell {

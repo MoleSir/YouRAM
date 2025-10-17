@@ -1,13 +1,11 @@
 use crate::circuit::{ShrString, Shr};
 use super::{Pin, Port};
 
-#[derive(Debug)]
 pub struct Net {
     pub name: ShrString,
     pub connections: Vec<NetNode>
 }
 
-#[derive(Debug)]
 pub enum NetNode {
     Port(Shr<Port>),
     Pin(Shr<Pin>),
