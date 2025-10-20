@@ -123,7 +123,7 @@ impl Bank {
         Ok(())
     }
 
-    fn has_column_address(&self) -> bool {
+    pub fn has_column_address(&self) -> bool {
         self.args.column_sel_size > 1
     }
 }

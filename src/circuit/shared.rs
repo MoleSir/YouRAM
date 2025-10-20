@@ -6,11 +6,21 @@ pub struct Shr<T: ?Sized> {
     inner: Arc<RwLock<T>>,
 }
 
+impl<T: ?Sized> Shr<T> {
+    pub fn from_inner(inner: Arc<RwLock<T>>) -> Self {
+        Self { inner }
+    }
+}
+
 impl<T> Shr<T> {
     pub fn new(value: T) -> Self {
         Self {
             inner: Arc::new(RwLock::new(value)),
         }
+    }
+
+    pub fn inner(self) -> Arc<RwLock<T>> {
+        self.inner
     }
 }
 

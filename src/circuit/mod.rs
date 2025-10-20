@@ -27,14 +27,13 @@ pub trait Design {
     }  
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub enum ShrCircuit {
-    Module(Shr<Box<dyn Modular>>),
-    LogicGate(Shr<LogicGate>),
-    Dff(Shr<Dff>),
-    Leafcell(Shr<Leafcell>),
+    Module(Shr<dyn Modular>),
+    Primitive(Shr<dyn Primitive>),
 }
 
-impl Into<ShrCircuit> for Shr<Box<dyn Modular>> {
+impl Into<ShrCircuit> for Shr<dyn Modular> {
     fn into(self) -> ShrCircuit {
         ShrCircuit::Module(self)
     }
@@ -42,19 +41,26 @@ impl Into<ShrCircuit> for Shr<Box<dyn Modular>> {
 
 impl Into<ShrCircuit> for Shr<LogicGate> {
     fn into(self) -> ShrCircuit {
-        ShrCircuit::LogicGate(self)
+        ShrCircuit::Primitive(self.into())
     }
 }
 
 impl Into<ShrCircuit> for Shr<Leafcell> {
     fn into(self) -> ShrCircuit {
-        ShrCircuit::Leafcell(self)
+        ShrCircuit::Primitive(self.into())
     }
 }
 
 impl Into<ShrCircuit> for Shr<Dff> {
     fn into(self) -> ShrCircuit {
-        ShrCircuit::Dff(self)
+        ShrCircuit::Primitive(self.into())
+    }
+}
+
+impl<A: ModuleArg + 'static> Into<ShrCircuit> for Shr<Module<A>> {
+    fn into(self) -> ShrCircuit {
+        let module: Shr<dyn Modular> = self.into();
+        ShrCircuit::Module(module)
     }
 }
 
@@ -62,9 +68,7 @@ impl ShrCircuit {
     pub fn name(&self) -> ShrString {
         match self {
             Self::Module(module) => module.read().name(),
-            Self::LogicGate(logicgate) => logicgate.read().name(),
-            Self::Dff(dff) => dff.read().name(),
-            Self::Leafcell(leafcell) => leafcell.read().name(),
+            Self::Primitive(p) => p.read().name(),
         }
     }
     
@@ -75,37 +79,23 @@ impl ShrCircuit {
         }
     }
 
-    pub fn is_logicgate(&self) -> bool {
+    pub fn is_primitive(&self) -> bool {
         match self {
-            Self::LogicGate(_) => true,
+            Self::Primitive(_) => true,
             _ => false,
         }
     }
 
-    pub fn is_leafcell(&self) -> bool {
-        match self {
-            Self::Leafcell(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn moudle(&self) -> Option<ShrModule> {
+    pub fn moudle(&self) -> Option<Shr<dyn Modular>> {
         match self {
             Self::Module(module) => Some(module.clone()),
             _ => None,
         }
     }
 
-    pub fn logicgate(&self) -> Option<Shr<LogicGate>> {
+    pub fn primitive(&self) -> Option<Shr<dyn Primitive>> {
         match self {
-            Self::LogicGate(logicgate) => Some(logicgate.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn leafcell(&self) -> Option<Shr<Leafcell>> {
-        match self {
-            Self::Leafcell(leafcell) => Some(leafcell.clone()),
+            Self::Primitive(p) => Some(p.clone()),
             _ => None,
         }
     }

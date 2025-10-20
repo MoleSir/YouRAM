@@ -1,7 +1,10 @@
 use std::{borrow::Borrow, collections::HashMap, hash::{Hash, Hasher}, sync::{Arc, LazyLock, RwLock}};
 
 #[derive(Debug, Clone)]
-pub struct ShrString(Arc<String>);
+pub enum ShrString {
+    Static(&'static str),
+    Dynamic(Arc<String>),
+}
 
 #[derive(Default)]
 pub struct StringPool {
@@ -13,21 +16,8 @@ static POOL: LazyLock<RwLock<StringPool>> = LazyLock::new(|| {
 });
 
 impl ShrString {
-    pub fn new<'a, S: Into<&'a str>>(s: S) -> Self {
-        Self::new_str(s)
-    }
-
-    pub fn new_str<'a, S: Into<&'a str>>(s: S) -> Self {
-        let s = s.into();
-        let map = &mut POOL.write().unwrap().map;
-
-        if let Some(existing) = map.get(s) {
-            return ShrString(existing.clone());
-        }
-
-        let arc = Arc::new(s.to_owned());
-        map.insert(arc.to_string(), arc.clone());
-        Self(arc)
+    pub fn new_str(s: &'static str) -> Self {
+        Self::Static(s)
     }
 
     pub fn new_string<S: Into<String>>(s: S) -> Self {
@@ -35,42 +25,44 @@ impl ShrString {
         let map = &mut POOL.write().unwrap().map;
 
         if let Some(existing) = map.get(&s) {
-            return ShrString(existing.clone());
+            return ShrString::Dynamic(existing.clone());
         }
 
         let arc = Arc::new(s);
         map.insert(arc.to_string(), arc.clone());
-        Self(arc)
+        Self::Dynamic(arc)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
+        match self {
+            Self::Static(s) => s,
+            Self::Dynamic(s) => s.as_str()
+        }
     }
 }
 
 impl Default for ShrString {
     fn default() -> Self {
-        Self::new("")
+        Self::new_str("")
     }
 }
 
 impl std::ops::Deref for ShrString {
     type Target = str;
-
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.as_str()
     }
 }
 
 impl std::fmt::Display for ShrString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(self.as_str())
     }
 }
 
 impl PartialEq for ShrString {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.as_str() == other.as_str()
     }
 }
 
@@ -78,34 +70,34 @@ impl Eq for ShrString {}
 
 impl Hash for ShrString {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state)
+        self.as_str().hash(state)
     }
 }
 
 impl PartialEq<&str> for ShrString {
     fn eq(&self, other: &&str) -> bool {
-        self.0.as_str() == *other
+        self.as_str() == *other
     }
 }
 impl PartialEq<ShrString> for &str {
     fn eq(&self, other: &ShrString) -> bool {
-        *self == other.0.as_str()
+        *self == other.as_str()
     }
 }
 
 impl PartialEq<String> for ShrString {
     fn eq(&self, other: &String) -> bool {
-        self.0.as_str() == other.as_str()
+        self.as_str() == other.as_str()
     }
 }
 impl PartialEq<ShrString> for String {
     fn eq(&self, other: &ShrString) -> bool {
-        self.as_str() == other.0.as_str()
+        self.as_str() == other.as_str()
     }
 }
 
-impl From<&str> for ShrString {
-    fn from(s: &str) -> Self {
+impl From<&'static str> for ShrString {
+    fn from(s: &'static str) -> Self {
         ShrString::new_str(s)
     }
 }
@@ -128,3 +120,80 @@ impl Borrow<str> for ShrString {
         self.as_str()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_static_str() {
+        let a = ShrString::new_str("hello");
+        let b = ShrString::from("hello");
+        assert_eq!(a, b);
+        assert_eq!(a.as_str(), "hello");
+        assert!(matches!(a, ShrString::Static(_)));
+    }
+
+    #[test]
+    fn test_dynamic_string_pooling() {
+        let s1 = ShrString::new_string("abc");
+        let s2 = ShrString::new_string("abc");
+
+        if let (ShrString::Dynamic(a1), ShrString::Dynamic(a2)) = (&s1, &s2) {
+            assert!(Arc::ptr_eq(a1, a2), "Expected pooled Arc to be shared");
+        } else {
+            panic!("Expected dynamic ShrString");
+        }
+
+        let s3 = ShrString::new_string("abcd");
+        if let (ShrString::Dynamic(a1), ShrString::Dynamic(a3)) = (&s1, &s3) {
+            assert!(!Arc::ptr_eq(a1, a3));
+        }
+    }
+
+    #[test]
+    fn test_display_and_deref() {
+        let s = ShrString::new_string("xyz");
+        assert_eq!(s.to_string(), "xyz");
+        assert_eq!(&*s, "xyz");
+    }
+
+    #[test]
+    fn test_partial_eq_variants() {
+        let s = ShrString::new_string("test");
+        assert_eq!(s, "test");
+        assert_eq!("test", s);
+        assert_eq!(s, "test".to_string());
+        assert_eq!("test".to_string(), s);
+    }
+
+    #[test]
+    fn test_hash_and_eq() {
+        use std::collections::HashSet;
+        let s1 = ShrString::new_string("foo");
+        let s2 = ShrString::new_string("foo");
+        let s3 = ShrString::new_string("bar");
+
+        let mut set = HashSet::new();
+        set.insert(s1.clone());
+        assert!(set.contains(&s2));
+        assert!(!set.contains(&s3));
+    }
+
+    #[test]
+    fn test_pool_is_global() {
+        let before = POOL.read().unwrap().map.len();
+        let _ = ShrString::new_string("pooled_test");
+        let after = POOL.read().unwrap().map.len();
+        assert!(after >= before, "Pool size should not decrease");
+    }
+
+    #[test]
+    fn test_borrow_trait() {
+        use std::collections::HashMap;
+        let mut map: HashMap<ShrString, i32> = HashMap::new();
+        map.insert("key1".into(), 42);
+        assert_eq!(map.get("key1"), Some(&42));
+    }
+}
+

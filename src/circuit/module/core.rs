@@ -75,7 +75,7 @@ impl Core {
                 we_en_net.clone(),
             ];
             nets.extend(wl_nets.iter().cloned());
-            if self.has_column_address() {
+            if bank.read().has_column_address() {
                 nets.extend((0..self.args.column_sel_size).map(|c| Self::col_select_pn(c)));                
             }
             nets.extend((0..self.args.word_width).map(|i| Self::data_input_pn(i)));
@@ -100,10 +100,6 @@ impl Core {
         }
 
         Ok(())
-    }
-
-    fn has_column_address(&self) -> bool {
-        self.args.column_sel_size > 1
     }
     
     pub fn bitcell_size(&self) -> usize {

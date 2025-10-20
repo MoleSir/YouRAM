@@ -4,7 +4,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use reda_unit::Number;
 use crate::{ErrorContext, YouRAMResult};
-
 use super::{Executer, Meas, SimulateError};
 
 pub struct Simulator {

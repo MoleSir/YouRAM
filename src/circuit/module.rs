@@ -28,17 +28,13 @@ register_module!(coreselect);
 
 use tracing::debug;
 
-use std::{collections::{HashMap, HashSet}, mem::MaybeUninit, ops::Deref};
+use std::{collections::{HashMap, HashSet}, mem::MaybeUninit, ops::Deref, sync::{Arc, RwLock}};
 use crate::{YouRAMResult, ErrorContext};
+use super::{CircuitError, CircuitFactory, Design, Dff, DriveStrength, Instance, LogicGate, LogicGateKind, ModuleArg, Net, Pin, Port, PortDirection, Shr, ShrCircuit, ShrString};
 
-use super::{CircuitError, CircuitFactory, Design, Dff, DriveStrength, Instance, Leafcell, LogicGate, LogicGateKind, ModuleArg, Net, Pin, Port, PortDirection, Shr, ShrCircuit, ShrString};
-
-pub trait Modular: Design {
+pub trait Modular: Design + Send + Sync {
     fn instances(&self) -> &[Shr<Instance>];
-    fn sub_modules(&self) -> &HashSet<ShrModule>;
-    fn sub_logicgates(&self) -> &HashSet<Shr<LogicGate>>;
-    fn sub_dffs(&self) -> &HashSet<Shr<Dff>>;
-    fn sub_leafcells(&self) -> &HashSet<Shr<Leafcell>>;
+    fn sub_circuits(&self) -> &HashSet<ShrCircuit>;
     fn connected_nets(&self) -> &[(Shr<Net>, Shr<Net>)];
 }
 
@@ -47,10 +43,7 @@ pub struct Module<A> {
     pub ports: Vec<Shr<Port>>,
     pub instances: Vec<Shr<Instance>>,
     
-    pub sub_modules: HashSet<ShrModule>,
-    pub sub_logicgates: HashSet<Shr<LogicGate>>,
-    pub sub_leafcells: HashSet<Shr<Leafcell>>,
-    pub sub_dffs: HashSet<Shr<Dff>>,
+    pub sub_circuits: HashSet<ShrCircuit>,
 
     pub nets: HashMap<ShrString, Shr<Net>>,
     pub connected_nets: Vec<(Shr<Net>, Shr<Net>)>,
@@ -58,7 +51,13 @@ pub struct Module<A> {
     pub args: A,
 }
 
-pub type ShrModule = Shr<Box<dyn Modular>>;
+impl<A: ModuleArg + 'static> Into<Shr<dyn Modular>> for Shr<Module<A>> {
+    fn into(self) -> Shr<dyn Modular> {
+        let inner = self.inner();
+        let inner: Arc<RwLock<dyn Modular>> = inner;
+        Shr::from_inner(inner)
+    }
+}
 
 pub trait AsInstance<A> : Clone {
     fn as_instance(self, module: &Module<A>) -> Result<Shr<Instance>, CircuitError>;
@@ -79,7 +78,7 @@ macro_rules! impl_link_instance {
             let name: ShrString = name.into();
             (|| -> YouRAMResult<Shr<Instance>> {
                 let cell = factory.$factory_fn();
-                self.sub_leafcells.insert(cell.clone());
+                self.sub_circuits.insert(cell.clone().into());
                 let instance = self.add_instance(name.clone(), cell)?;
                 self.connect_instance(instance.clone(), [$($port.into()),+].into_iter())?;
                 Ok(instance)
@@ -95,10 +94,7 @@ impl<A> Module<A> {
             name: name.into(), 
             ports: Vec::new(),
             instances: Vec::new(),
-            sub_modules: HashSet::new(),
-            sub_logicgates: HashSet::new(),
-            sub_dffs: HashSet::new(),
-            sub_leafcells: HashSet::new(),
+            sub_circuits: HashSet::new(),
             nets: HashMap::new(),
             connected_nets: Vec::new(),
             args
@@ -125,11 +121,11 @@ impl<A> Module<A> {
         .with_context(|| format!("add port {} to circuit {}", name, self.name))
     }
 
-    pub fn add_module(&mut self, arg: impl ModuleArg + 'static, factory: &mut CircuitFactory) -> YouRAMResult<Shr<Box<dyn Modular>>> {   
-        (|| -> YouRAMResult<Shr<Box<dyn Modular>>> {
+    pub fn add_module<Arg: ModuleArg + 'static>(&mut self, arg: Arg, factory: &mut CircuitFactory) -> YouRAMResult<Shr<Module<Arg>>> {   
+        (|| -> YouRAMResult<Shr<Module<Arg>>> {
             debug!("add sub module to circuit {}", self.name);
             let module = factory.module(arg)?;
-            self.sub_modules.insert(module.clone());
+            self.sub_circuits.insert(module.clone().into());
             Ok(module) 
         })()  
         .with_context(|| format!("add sub module to circuit {}", self.name))
@@ -139,7 +135,7 @@ impl<A> Module<A> {
         (|| -> YouRAMResult<Shr<LogicGate>> {
             debug!("add logicgate {}, {} to circuit {}", kind, drive_strength, self.name);
             let logicgate = factory.logicgate(kind, drive_strength)?;
-            self.sub_logicgates.insert(logicgate.clone());
+            self.sub_circuits.insert(logicgate.clone().into());
             Ok(logicgate)
         })()  
         .with_context(|| format!("add logicgate ({},{}) to circuit {}", kind, drive_strength, self.name))
@@ -149,7 +145,7 @@ impl<A> Module<A> {
         (|| -> YouRAMResult<Shr<Dff>> {
             debug!("add dff {} to circuit {}", drive_strength, self.name);
             let dff = factory.dff(drive_strength)?;
-            self.sub_dffs.insert(dff.clone());
+            self.sub_circuits.insert(dff.clone().into());
             Ok(dff)
         })()  
         .with_context(|| format!("add dff ({}) to circuit {}", drive_strength, self.name))
@@ -279,13 +275,14 @@ impl<A> Module<A> {
         .with_context(|| format!("connect logicgate instance {} to circuit {}", name, self.name))
     }
 
-    pub fn link_module_instance<N, S, I>(&mut self, name: N, template_circuit: ShrModule, nets: I) -> YouRAMResult<Shr<Instance>> 
+    pub fn link_module_instance<Arg, N, S, I>(&mut self, name: N, template_module: Shr<Module<Arg>>, nets: I) -> YouRAMResult<Shr<Instance>> 
     where 
+        Arg: ModuleArg + 'static,
         N: Into<ShrString>,
         S: Into<ShrString>,
         I: ExactSizeIterator<Item = S>,
     {
-        let instance = self.add_instance(name, template_circuit)?;
+        let instance = self.add_instance(name, template_module)?;
         self.connect_instance(instance.clone(), nets)?;
         Ok(instance)
     }
@@ -415,21 +412,9 @@ impl<A> Design for Module<A> {
     }
 }
 
-impl<A> Modular for Module<A> {
-    fn sub_modules(&self) -> &HashSet<ShrModule> {
-        &self.sub_modules
-    }
-
-    fn sub_logicgates(&self) -> &HashSet<Shr<LogicGate>> {
-        &self.sub_logicgates
-    }
-
-    fn sub_leafcells(&self) -> &HashSet<Shr<Leafcell>> {
-        &self.sub_leafcells
-    }
-
-    fn sub_dffs(&self) -> &HashSet<Shr<Dff>> {
-        &self.sub_dffs
+impl<A: Sync + Send> Modular for Module<A> {
+    fn sub_circuits(&self) -> &HashSet<ShrCircuit> {
+        &self.sub_circuits
     }
 
     fn connected_nets(&self) -> &[(Shr<Net>, Shr<Net>)] {
