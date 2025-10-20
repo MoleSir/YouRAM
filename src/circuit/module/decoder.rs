@@ -1,5 +1,5 @@
 use youram_macro::module;
-use crate::{check_arg, circuit::{CircuitFactory, DriveStrength, StdcellKind}, format_shr, ErrorContext, YouRAMResult};
+use crate::{check_arg, circuit::{CircuitFactory, DriveStrength, LogicGateKind}, format_shr, ErrorContext, YouRAMResult};
 
 const MAX_SIMPLE_INPUT_SIZE: usize = 4;
 const MIN_INPUT_SIZE: usize = 1;
@@ -23,16 +23,9 @@ const SUB_DECODERS_INPUT_SIZES: [&'static [usize]; 8] = [
 )]
 pub struct Decoder {
     pub input_size: usize,
-    pub output_size: usize,
-}
 
-impl DecoderArg {
-    pub fn new(input_size: usize) -> Self {
-        Self {
-            input_size,
-            output_size: 2usize.pow(input_size as u32),
-        }
-    } 
+    #[new(value = "2usize.pow(input_size as u32)")]
+    pub output_size: usize,
 }
 
 impl Decoder {
@@ -41,16 +34,25 @@ impl Decoder {
         check_arg!(self.args.input_size <= MAX_INPUT_SIZE, "Input size '{}' > {}", self.args.input_size, MAX_INPUT_SIZE);
 
         match self.args.kind() {
-            DecoderType::OneAddr => unimplemented!(),
+            DecoderType::OneAddr => self.build_one_addr(factory),
             DecoderType::Simple => self.build_simple(factory),
             DecoderType::Componet => self.build_componet(factory),
         }
 
     }
 
+    fn build_one_addr(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
+        let inv = self.add_logicgate(LogicGateKind::Inv, DriveStrength::X2, factory)?;
+        
+        self.link_inv_instance("inv0", inv.clone(), [Self::address_pn(0), Self::output_pn(0), Self::vdd_pn(), Self::gnd_pn()])?;
+        self.link_inv_instance("inv1", inv.clone(), [Self::output_pn(0), Self::output_pn(1), Self::vdd_pn(), Self::gnd_pn()])?;
+
+        Ok(())
+    }
+
     fn build_simple(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
-        let inv = self.add_stdcell(StdcellKind::Inv, DriveStrength::X2, factory)?;
-        let and = self.add_stdcell(StdcellKind::And(self.args.input_size), DriveStrength::X2, factory)?;
+        let inv = self.add_logicgate(LogicGateKind::Inv, DriveStrength::X2, factory)?;
+        let and = self.add_logicgate(LogicGateKind::And(self.args.input_size), DriveStrength::X2, factory)?;
                         
         let input_ports: Vec<_> = (0..self.args.input_size).map(|i| Self::address_pn(i)).collect();
         let input_ports_bar: Vec<_> = (0..self.args.input_size).map(|i| format_shr!("A{}_bar", i)).collect();
@@ -77,7 +79,7 @@ impl Decoder {
             }
 
             let inst_name = format!("and{}", i);
-            self.link_stdcell_instance(
+            self.link_logicgate_instance(
                 inst_name, and.clone(), 
                 input_nets, Self::output_pn(i), Self::vdd_pn(), Self::gnd_pn()
             )?;
@@ -88,7 +90,7 @@ impl Decoder {
 
     fn build_componet(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
         let sub_decoders_input_size = self.sub_decoders_input_size();
-        let and = self.add_stdcell(StdcellKind::And(sub_decoders_input_size.len()), DriveStrength::X2, factory).context("create and")?;
+        let and = self.add_logicgate(LogicGateKind::And(sub_decoders_input_size.len()), DriveStrength::X2, factory).context("create and")?;
 
         let mut global_input_index = 0;
         for (decoder_index, &sub_input_size) in sub_decoders_input_size.iter().enumerate() {
@@ -132,7 +134,7 @@ impl Decoder {
                 input_nets.push(format_shr!("Y_{}_{}", decoder_index, decoder_output_index));
             }   
 
-            self.link_stdcell_instance(format!("and{}", and_index), and.clone(), 
+            self.link_logicgate_instance(format!("and{}", and_index), and.clone(), 
                 input_nets, Self::output_pn(and_index), Self::vdd_pn(), Self::gnd_pn()
             )?;
         }

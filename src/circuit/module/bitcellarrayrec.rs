@@ -2,21 +2,15 @@ use youram_macro::module;
 use crate::{check_arg, circuit::CircuitFactory, format_shr, YouRAMResult};
 
 #[module(
-    bitline:      ("bl{colum_size}", InOut),
-    bitline_bar:  ("br{colum_size}", InOut),
+    bitline:      ("bl{column_size}", InOut),
+    bitline_bar:  ("br{column_size}", InOut),
     wordline:     ("wl{row_size}", Input),
     vdd:          ("vdd", Source),
     gnd:          ("gnd", Source),
 )]
 pub struct BitcellArrayRecursive {
     pub row_size: usize,
-    pub colum_size: usize,   
-}
-
-impl BitcellArrayRecursiveArg {
-    pub fn new(row_size: usize, colum_size: usize) -> Self {
-        Self { row_size, colum_size }
-    }
+    pub column_size: usize,   
 }
 
 impl BitcellArrayRecursive {
@@ -58,11 +52,11 @@ impl BitcellArrayRecursive {
     */ 
     pub fn build(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
         check_arg!(self.args.row_size >= 1, "row size {} < 1", self.args.row_size);
-        check_arg!(self.args.colum_size >= 1, "column size {} < 1", self.args.colum_size);
+        check_arg!(self.args.column_size >= 1, "column size {} < 1", self.args.column_size);
 
-        if self.args.row_size >= 4 || self.args.colum_size >= 4 {
+        if self.args.row_size >= 4 || self.args.column_size >= 4 {
             let row_sub_array_info = SubArrayInfo::from_size(self.args.row_size);
-            let col_sub_array_info = SubArrayInfo::from_size(self.args.colum_size);
+            let col_sub_array_info = SubArrayInfo::from_size(self.args.column_size);
 
             let row_col_sub_array = 
                 self.add_module(BitcellArrayRecursiveArg::new(row_sub_array_info.size, col_sub_array_info.size), factory)?;
@@ -178,7 +172,7 @@ impl BitcellArrayRecursive {
             };
         } else {
             for row in 0..self.args.row_size {
-                for col in 0..self.args.colum_size {
+                for col in 0..self.args.column_size {
                     self.link_bitcell_instance(
                         factory, 
                         format!("bitcell_{}_{}", row, col), 

@@ -25,18 +25,23 @@ fn write_spice_recursive<W: Write>(
     let module_ref = module.read();
     debug!("write module {}", module_ref.name());
 
-    // write sub cell
     for leafcell in module_ref.sub_leafcells() {
         if exported.insert(leafcell.read().name()) {
             writeln!(writer, "{}", leafcell.read().netlist().to_spice())?;
             write!(writer, "\n\n")?;
         }            
     }
-    for stdcell in module_ref.sub_stdcells() {
-        if exported.insert(stdcell.read().name()) {
-            writeln!(writer, "{}", stdcell.read().netlist().to_spice())?;
+    for logicgate in module_ref.sub_logicgates() {
+        if exported.insert(logicgate.read().name()) {
+            writeln!(writer, "{}", logicgate.read().netlist().to_spice())?;
             write!(writer, "\n\n")?;
         }   
+    }
+    for dff in module_ref.sub_dffs() {
+        if exported.insert(dff.read().name()) {
+            writeln!(writer, "{}", dff.read().netlist().to_spice())?;
+            write!(writer, "\n\n")?;
+        }  
     }
     for sub_module in module_ref.sub_modules() {
         if exported.insert(sub_module.read().name()) {
@@ -50,7 +55,7 @@ fn write_spice_recursive<W: Write>(
     let port_names: Vec<_> = ports.iter().map(|p| p.read().name.to_string()).collect();
     writeln!(writer, ".SUBCKT {} {}", module_ref.name(), port_names.join(" "))?;
 
-    // Instance
+    // instance
     for inst in module_ref.instances() {            
         let inst = inst.read();
         
@@ -64,6 +69,14 @@ fn write_spice_recursive<W: Write>(
 
         let subckt_name = inst.template_circuit.name();
         writeln!(writer, "X{} {} {}", inst.name, pin_nets.join(" "), subckt_name)?;
+    }
+
+    // connect net
+    for (i, (net1, net2)) in module_ref.connected_nets().iter().enumerate() {
+        writeln!(writer, 
+            "Rconnect{} {} {} {}", 
+            i, net1.read().name, net2.read().name, 0.001
+        )?;
     }
 
     writeln!(writer, ".ENDS {}", module_ref.name())?;

@@ -1,13 +1,16 @@
 use std::fmt::Display;
-
 use reda_lib::model::LibCell;
 use reda_sp::Subckt;
 use crate::circuit::{CircuitError, Design, Port, Shr, ShrString};
-
 use super::Primitive;
 
+pub enum Stdcell {
+    LogicGate(LogicGate),
+    Dff(Dff),
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub enum StdcellKind {
+pub enum LogicGateKind {
     Inv,
     And(usize),
     Or(usize),
@@ -21,16 +24,16 @@ pub enum DriveStrength {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct StdcellArg {
-    pub kind: StdcellKind,
+pub struct LogicGateArg {
+    pub kind: LogicGateKind,
     pub strength: DriveStrength,
 }
 
-pub struct Stdcell {
+pub struct LogicGate {
     pub name: ShrString,
     
     pub drive_strength: DriveStrength,
-    pub kind: StdcellKind,
+    pub kind: LogicGateKind,
 
     pub ports: Vec<Shr<Port>>,
     pub input_port_indexs: Vec<usize>,
@@ -41,34 +44,37 @@ pub struct Stdcell {
     pub netlist: Subckt,
 }
 
-// pub struct Stdcell {
-//     pub name: ShrString,
-    
-//     pub drive_strength: DriveStrength,
-//     pub kind: StdcellKind,
-
-//     pub ports: Vec<Shr<Port>>,
-//     pub port_kinds: Vec<StdcellPort>,
-//     pub input_port_size: usize,
-
-//     pub netlist: Subckt,
-// }
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub enum StdcellPort {
+pub enum LogicGatePort {
     Input(usize),
     Output,
     Vdd,
     Gnd,
 }
 
-impl StdcellArg {
-    pub fn new(kind: StdcellKind, strength: DriveStrength) -> Self {
+pub struct Dff {
+    pub name: ShrString,
+    
+    pub drive_strength: DriveStrength,
+
+    pub ports: Vec<Shr<Port>>,
+    pub din_port_index: usize,
+    pub clk_port_index: usize,
+    pub q_port_index: usize,
+    pub qn_port_index: usize,
+    pub vdd_port_index: usize,
+    pub gnd_port_index: usize,
+
+    pub netlist: Subckt,
+}
+
+impl LogicGateArg {
+    pub fn new(kind: LogicGateKind, strength: DriveStrength) -> Self {
         Self { kind, strength }
     }
 }
 
-impl Stdcell {
+impl LogicGate {
     pub fn input_ports(&self) -> impl Iterator<Item = &Shr<Port>> {
         self.ports.iter()
             .filter(|port| port.read().is_input())
@@ -87,7 +93,7 @@ impl Stdcell {
     pub fn input_pn(&self, order: usize) -> Result<ShrString, CircuitError> {
         self.input_ports()
             .nth(order)
-            .ok_or_else(|| CircuitError::StdcellInputPortOutOfRange(order))
+            .ok_or_else(|| CircuitError::LogicGateInputPortOutOfRange(order))
             .map(|port| port.read().name.clone())
     }
 
@@ -152,7 +158,7 @@ impl Display for DriveStrength {
     }
 }
 
-impl Display for StdcellKind {
+impl Display for LogicGateKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Inv => write!(f, "inv"),
@@ -164,7 +170,7 @@ impl Display for StdcellKind {
     }
 }
 
-impl Design for Stdcell {
+impl Design for LogicGate {
     fn name(&self) -> ShrString {
         self.name.clone()
     }
@@ -174,8 +180,49 @@ impl Design for Stdcell {
     }
 }
 
-impl Primitive for Stdcell {
+impl Primitive for LogicGate {
     fn netlist(&self) -> &Subckt {
         &self.netlist
+    }
+}
+
+impl Design for Dff {
+    fn name(&self) -> ShrString {
+        self.name.clone()
+    }
+
+    fn ports(&self) -> &[Shr<Port>] {
+        &self.ports
+    }
+}
+
+impl Primitive for Dff {
+    fn netlist(&self) -> &Subckt {
+        &self.netlist
+    }
+}
+
+impl Design for Stdcell {
+    fn name(&self) -> ShrString {
+        match self {
+            Self::LogicGate(s) => s.name(),
+            Self::Dff(s) => s.name(),
+        }
+    }
+
+    fn ports(&self) -> &[Shr<Port>] {
+        match self {
+            Self::LogicGate(s) => s.ports(),
+            Self::Dff(s) => s.ports(),
+        }
+    }
+}
+
+impl Primitive for Stdcell {
+    fn netlist(&self) -> &Subckt {
+        match self {
+            Self::LogicGate(s) => s.netlist(),
+            Self::Dff(s) => s.netlist(),
+        }
     }
 }

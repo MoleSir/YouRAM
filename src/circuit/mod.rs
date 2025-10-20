@@ -29,7 +29,8 @@ pub trait Design {
 
 pub enum ShrCircuit {
     Module(Shr<Box<dyn Modular>>),
-    Stdcell(Shr<Stdcell>),
+    LogicGate(Shr<LogicGate>),
+    Dff(Shr<Dff>),
     Leafcell(Shr<Leafcell>),
 }
 
@@ -39,9 +40,9 @@ impl Into<ShrCircuit> for Shr<Box<dyn Modular>> {
     }
 }
 
-impl Into<ShrCircuit> for Shr<Stdcell> {
+impl Into<ShrCircuit> for Shr<LogicGate> {
     fn into(self) -> ShrCircuit {
-        ShrCircuit::Stdcell(self)
+        ShrCircuit::LogicGate(self)
     }
 }
 
@@ -51,11 +52,18 @@ impl Into<ShrCircuit> for Shr<Leafcell> {
     }
 }
 
+impl Into<ShrCircuit> for Shr<Dff> {
+    fn into(self) -> ShrCircuit {
+        ShrCircuit::Dff(self)
+    }
+}
+
 impl ShrCircuit {
     pub fn name(&self) -> ShrString {
         match self {
             Self::Module(module) => module.read().name(),
-            Self::Stdcell(stdcell) => stdcell.read().name(),
+            Self::LogicGate(logicgate) => logicgate.read().name(),
+            Self::Dff(dff) => dff.read().name(),
             Self::Leafcell(leafcell) => leafcell.read().name(),
         }
     }
@@ -67,9 +75,9 @@ impl ShrCircuit {
         }
     }
 
-    pub fn is_stdcell(&self) -> bool {
+    pub fn is_logicgate(&self) -> bool {
         match self {
-            Self::Stdcell(_) => true,
+            Self::LogicGate(_) => true,
             _ => false,
         }
     }
@@ -88,9 +96,9 @@ impl ShrCircuit {
         }
     }
 
-    pub fn stdcell(&self) -> Option<Shr<Stdcell>> {
+    pub fn logicgate(&self) -> Option<Shr<LogicGate>> {
         match self {
-            Self::Stdcell(stdcell) => Some(stdcell.clone()),
+            Self::LogicGate(logicgate) => Some(logicgate.clone()),
             _ => None,
         }
     }

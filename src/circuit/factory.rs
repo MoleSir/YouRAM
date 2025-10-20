@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tracing::info;
 use crate::pdk::Pdk;
 use crate::{ErrorContext, YouRAMResult};
-use super::{CircuitError, DriveStrength, Leafcell, Modular, Module, Shr, ShrString, Stdcell, StdcellKind};
+use super::{CircuitError, Dff, DriveStrength, Leafcell, LogicGate, LogicGateKind, Modular, Module, Shr, ShrString};
 
 pub trait ModuleArg: Sized + Debug {
     fn module_name(&self) -> ShrString;
@@ -38,49 +38,58 @@ impl CircuitFactory {
         }
     }
 
-    pub fn stdcell(&self, kind: StdcellKind, drive_strength: DriveStrength) -> Result<Shr<Stdcell>, CircuitError> {
-        self.pdk.get_stdcell(kind, drive_strength)
-            .ok_or_else(|| CircuitError::StdcellNotFound(kind, drive_strength))
+    pub fn logicgate(&self, kind: LogicGateKind, drive_strength: DriveStrength) -> Result<Shr<LogicGate>, CircuitError> {
+        self.pdk.get_logicgate(kind, drive_strength)
+            .ok_or_else(|| CircuitError::LogicGateNotFound(kind, drive_strength))
     }
 
-    pub fn and(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<Stdcell>, CircuitError> {
+    pub fn and(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<LogicGate>, CircuitError> {
         self.pdk.get_and(input_size, drive_strength)
-            .ok_or_else(|| CircuitError::StdcellNotFound(StdcellKind::And(input_size), drive_strength))
+            .ok_or_else(|| CircuitError::LogicGateNotFound(LogicGateKind::And(input_size), drive_strength))
     }
 
-    pub fn nand(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<Stdcell>, CircuitError> {
+    pub fn nand(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<LogicGate>, CircuitError> {
         self.pdk.get_nand(input_size, drive_strength)
-            .ok_or_else(|| CircuitError::StdcellNotFound(StdcellKind::Nand(input_size), drive_strength))
+            .ok_or_else(|| CircuitError::LogicGateNotFound(LogicGateKind::Nand(input_size), drive_strength))
     }
 
-    pub fn or(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<Stdcell>, CircuitError> {
+    pub fn or(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<LogicGate>, CircuitError> {
         self.pdk.get_or(input_size, drive_strength)
-            .ok_or_else(|| CircuitError::StdcellNotFound(StdcellKind::Or(input_size), drive_strength))
+            .ok_or_else(|| CircuitError::LogicGateNotFound(LogicGateKind::Or(input_size), drive_strength))
     }
 
-    pub fn nor(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<Stdcell>, CircuitError> {
+    pub fn nor(&self, input_size: usize, drive_strength: DriveStrength) -> Result<Shr<LogicGate>, CircuitError> {
         self.pdk.get_or(input_size, drive_strength)
-            .ok_or_else(|| CircuitError::StdcellNotFound(StdcellKind::Nor(input_size), drive_strength))
+            .ok_or_else(|| CircuitError::LogicGateNotFound(LogicGateKind::Nor(input_size), drive_strength))
     }
 
-    pub fn inv(&self, drive_strength: DriveStrength) -> Result<Shr<Stdcell>, CircuitError> {
+    pub fn inv(&self, drive_strength: DriveStrength) -> Result<Shr<LogicGate>, CircuitError> {
         self.pdk.get_inv(drive_strength)
-            .ok_or_else(|| CircuitError::StdcellNotFound(StdcellKind::Inv, drive_strength))
+            .ok_or_else(|| CircuitError::LogicGateNotFound(LogicGateKind::Inv, drive_strength))
+    }
+
+    pub fn dff(&self, drive_strength: DriveStrength) -> Result<Shr<Dff>, CircuitError> {
+        self.pdk.get_dff(drive_strength)
+            .ok_or_else(|| CircuitError::DffNotFound(drive_strength))
     }
 
     pub fn bitcell(&self) -> Shr<Leafcell> {
-        self.pdk.get_bitcell().clone()
+        self.pdk.get_bitcell()
     }
 
     pub fn sense_amp(&self) -> Shr<Leafcell> {
-        self.pdk.get_sense_amp().clone()
+        self.pdk.get_sense_amp()
     }
 
     pub fn column_trigate(&self) -> Shr<Leafcell> {
-        self.pdk.get_column_trigate().clone()
+        self.pdk.get_column_trigate()
     }
 
     pub fn write_driver(&self) -> Shr<Leafcell> {
-        self.pdk.get_write_driver().clone()
+        self.pdk.get_write_driver()
+    }
+
+    pub fn precharge(&self) -> Shr<Leafcell> {
+        self.pdk.get_precharge()
     }
 }

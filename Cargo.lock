@@ -331,9 +331,9 @@ checksum = "941ba9d78d8e2f7ce474c015eea4d9c6d25b6a3327f9832ee29a4de27f91bbb8"
 
 [[package]]
 name = "reda-lib"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68e89ca7ddd887594d0a2c41206d67b75181f3d45fd50d6ca2a23a4ec3756f52"
+checksum = "b67316e3582db4e34888e6f73367793e5ff5854435ab17703388d317caf703c0"
 dependencies = [
  "derive_builder",
  "nom",
@@ -730,6 +730,7 @@ version = "0.1.0"
 dependencies = [
  "derive-new",
  "derive_builder",
+ "paste",
  "reda-lib",
  "reda-sp",
  "reda-unit",

@@ -1,6 +1,6 @@
 use reda_lib::model::{LibCell, LibExpr, LibPinDirection};
 use reda_sp::Spice;
-use crate::circuit::{Bitcell, ColumnTriGate, DriveStrength, Port, PortDirection, SenseAmp, Stdcell, StdcellKind, WriteDriver, BITCELL_NAME, COLUMN_TRI_GATE_NAME, SENSE_AMP_NAME, WRITE_DRIVER_NAME};
+use crate::circuit::{Bitcell, ColumnTriGate, Dff, DriveStrength, LogicGate, LogicGateKind, Port, PortDirection, Precharge, SenseAmp, WriteDriver, BITCELL_NAME, COLUMN_TRI_GATE_NAME, PRECHARGE_NAME, SENSE_AMP_NAME, WRITE_DRIVER_NAME};
 use super::{Pdk, PdkError};
 
 impl Pdk {
@@ -83,11 +83,103 @@ impl Pdk {
 
         Ok(ColumnTriGate::new(bl, br, bl_o, br_o, sel, vdd, gnd, subckt))
     }
+
+    pub fn extract_precharge(spice: &Spice) -> Result<Precharge, PdkError> {
+        let subckt = spice.subckts.iter()
+            .find(|s| s.name == PRECHARGE_NAME)
+            .ok_or_else(|| PdkError::UnexitLeafCell(PRECHARGE_NAME))?
+            .clone();
+
+        if subckt.ports.len() != 4 {
+            return Err(PdkError::UnmatchLeafCellPinSize(4, subckt.ports.len(), PRECHARGE_NAME));
+        }
+
+        let bl    = Port::new(subckt.ports[0].clone(), PortDirection::InOut);
+        let br    = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
+        let enable   = Port::new(subckt.ports[2].clone(), PortDirection::Input);
+        let vdd   = Port::new(subckt.ports[3].clone(), PortDirection::Source);
+
+        Ok(Precharge::new(bl, br, enable, vdd, subckt))   
+    }
 }
 
 impl Pdk {
-    // TODO: better way to extract stdcell!
-    pub fn extract_stdcell(cell: &LibCell, spice: &Spice) -> Option<Stdcell> {
+    pub fn extract_dff(cell: &LibCell, spice: &Spice) -> Option<Dff> {
+        // ff exit?
+        let ff = cell.ff.as_ref()?;
+        // TODO: better way to check (din, clk, q, qn)
+        if cell.input_pins().count() == 2 && cell.output_pins().count() == 2 {
+            let subckt = spice.subckts.iter()
+                .find(|s| s.name == cell.name)?
+                .clone();
+
+            let drive_strength = DriveStrength::try_from_cell(cell)?;
+
+            let mut ports = vec![];
+            let mut din_port_index = None;
+            let mut clk_port_index = None;
+            let mut q_port_index = None;
+            let mut qn_port_index = None;
+            let mut vdd_port_index = None;
+            let mut gnd_port_index = None;
+            for (port_index, port_name) in subckt.ports.iter().enumerate() {
+                if let Some(pin) = cell.get_pin(&port_name) {
+                    let direction = match pin.direction {
+                        LibPinDirection::Input => {
+                            if pin.clock == Some(true) {
+                                clk_port_index = Some(port_index);
+                            } else {
+                                din_port_index = Some(port_index);
+                            }
+                            PortDirection::Input
+                        }
+                        LibPinDirection::Output => {
+                            let function = pin.function.as_ref()?;
+                            if let LibExpr::Var(name) = function {
+                                if name.as_str() == ff.names[0].as_str() {
+                                    q_port_index = Some(port_index);
+                                } else if name.as_str() == ff.names[1].as_str() {
+                                    qn_port_index = Some(port_index);
+                                } else {
+                                    panic!()
+                                }
+                            } else {
+                                panic!();
+                            }
+                            PortDirection::Output
+                        }
+                        _ => panic!(),
+                    };
+                    ports.push(Port::new(port_name.clone(), direction));
+                } else if let Some(_) = cell.get_pg_pin(&port_name) {
+                    if vdd_port_index.is_none() {
+                        vdd_port_index = Some(port_index);
+                    } else {
+                        gnd_port_index = Some(port_index);
+                    }
+                    ports.push(Port::new(port_name.clone(), PortDirection::Source));
+                }
+            }
+
+            Some(Dff {
+                name: cell.name.clone().into(),
+                drive_strength,
+                ports,
+                din_port_index: din_port_index?,
+                clk_port_index: clk_port_index?,
+                q_port_index: q_port_index?,
+                qn_port_index: qn_port_index?,
+                vdd_port_index: vdd_port_index?,
+                gnd_port_index: gnd_port_index?,
+                netlist: subckt,
+            })
+        } else {
+            None
+        }
+    }
+
+    // TODO: better way to extract logicgate!
+    pub fn extract_logicgate(cell: &LibCell, spice: &Spice) -> Option<LogicGate> {
         // 1. 根据输出 pin function 判断类型
         if cell.output_pins().count() != 1 {
             return None;
@@ -134,13 +226,13 @@ impl Pdk {
             }
         }
 
-        if kind == StdcellKind::Inv && ports.len() != 4 {
+        if kind == LogicGateKind::Inv && ports.len() != 4 {
             return None;
         }
 
         let drive_strength = DriveStrength::try_from_cell(cell)?;
 
-        Some(Stdcell {
+        Some(LogicGate {
             name: cell.name.clone().into(),
             drive_strength,
             kind,
@@ -153,16 +245,16 @@ impl Pdk {
         })
     }
 
-    pub fn try_transform_expr(expr: &LibExpr) -> Option<StdcellKind> {
+    pub fn try_transform_expr(expr: &LibExpr) -> Option<LogicGateKind> {
         match expr {
             LibExpr::Not(inner) => match &**inner {
-                LibExpr::Var(_) => Some(StdcellKind::Inv),
-                LibExpr::And(_) => Self::analyze_and_or(inner, true).map(StdcellKind::Nand),
-                LibExpr::Or(_) => Self::analyze_and_or(inner, true).map(StdcellKind::Nor),
+                LibExpr::Var(_) => Some(LogicGateKind::Inv),
+                LibExpr::And(_) => Self::analyze_and_or(inner, true).map(LogicGateKind::Nand),
+                LibExpr::Or(_) => Self::analyze_and_or(inner, true).map(LogicGateKind::Nor),
                 _ => None,
             },
-            LibExpr::And(_) => Self::analyze_and_or(expr, false).map(StdcellKind::And),
-            LibExpr::Or(_) => Self::analyze_and_or(expr, false).map(StdcellKind::Or),
+            LibExpr::And(_) => Self::analyze_and_or(expr, false).map(LogicGateKind::And),
+            LibExpr::Or(_) => Self::analyze_and_or(expr, false).map(LogicGateKind::Or),
             _ => None,
         }
     }
@@ -215,7 +307,7 @@ mod tests {
     use std::str::FromStr;
     use super::*;
 
-    fn str_to_kind(s: &str) -> Option<StdcellKind> {
+    fn str_to_kind(s: &str) -> Option<LogicGateKind> {
         let expr = LibExpr::from_str(s).unwrap();
         Pdk::try_transform_expr(&expr)
     }
@@ -224,32 +316,32 @@ mod tests {
     fn test_std_cell_kind() {
 
         // 单变量 NOT -> Inv
-        assert_eq!(str_to_kind("!A").unwrap(), StdcellKind::Inv);
+        assert_eq!(str_to_kind("!A").unwrap(), LogicGateKind::Inv);
 
         // 简单 AND
-        assert_eq!(str_to_kind("(A1 & A2)").unwrap(), StdcellKind::And(2));
+        assert_eq!(str_to_kind("(A1 & A2)").unwrap(), LogicGateKind::And(2));
 
         // 嵌套 AND
-        assert_eq!(str_to_kind("((A1 & A2) & A3)").unwrap(), StdcellKind::And(3));
-        assert_eq!(str_to_kind("(((A1 & A2) & A3) & A4)").unwrap(), StdcellKind::And(4));
+        assert_eq!(str_to_kind("((A1 & A2) & A3)").unwrap(), LogicGateKind::And(3));
+        assert_eq!(str_to_kind("(((A1 & A2) & A3) & A4)").unwrap(), LogicGateKind::And(4));
 
         // 简单 NAND
-        assert_eq!(str_to_kind("!(A1 & A2)").unwrap(), StdcellKind::Nand(2));
+        assert_eq!(str_to_kind("!(A1 & A2)").unwrap(), LogicGateKind::Nand(2));
 
         // 嵌套 NAND
-        assert_eq!(str_to_kind("!((A1 & A2) & A3)").unwrap(), StdcellKind::Nand(3));
-        assert_eq!(str_to_kind("!(((A1 & A2) & A3) & A4)").unwrap(), StdcellKind::Nand(4));
+        assert_eq!(str_to_kind("!((A1 & A2) & A3)").unwrap(), LogicGateKind::Nand(3));
+        assert_eq!(str_to_kind("!(((A1 & A2) & A3) & A4)").unwrap(), LogicGateKind::Nand(4));
 
         // 简单 OR
-        assert_eq!(str_to_kind("(A1 | A2)").unwrap(), StdcellKind::Or(2));
+        assert_eq!(str_to_kind("(A1 | A2)").unwrap(), LogicGateKind::Or(2));
 
         // 简单 NOR
-        assert_eq!(str_to_kind("!(A1 | A2)").unwrap(), StdcellKind::Nor(2));
+        assert_eq!(str_to_kind("!(A1 | A2)").unwrap(), LogicGateKind::Nor(2));
 
         // 嵌套 OR
-        assert_eq!(str_to_kind("((A1 | A2) | A3)").unwrap(), StdcellKind::Or(3));
+        assert_eq!(str_to_kind("((A1 | A2) | A3)").unwrap(), LogicGateKind::Or(3));
 
         // 嵌套 NOR
-        assert_eq!(str_to_kind("!((A1 | A2) | A3)").unwrap(), StdcellKind::Nor(3));
+        assert_eq!(str_to_kind("!((A1 | A2) | A3)").unwrap(), LogicGateKind::Nor(3));
     }
 }

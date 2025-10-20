@@ -6,15 +6,17 @@ use std::{collections::HashMap, path::Path};
 use reda_lib::model::LibLibrary;
 use reda_sp::Spice;
 use serde::{Deserialize, Serialize};
-use crate::{circuit::{DriveStrength, Leafcell, Shr, Stdcell, StdcellKind}, ErrorContext, YouRAMError, YouRAMResult};
+use crate::{circuit::{Dff, DriveStrength, Leafcell, LogicGate, LogicGateKind, Shr}, ErrorContext, YouRAMError, YouRAMResult};
 
 pub struct Pdk {
     pub config: PdkConfig,
-    pub stdcells: HashMap<(StdcellKind, DriveStrength), Shr<Stdcell>>,
+    pub logicgates: HashMap<(LogicGateKind, DriveStrength), Shr<LogicGate>>,
+    pub dffs: HashMap<DriveStrength, Shr<Dff>>,
     pub bitcell: Shr<Leafcell>,
     pub sense_amp: Shr<Leafcell>,
     pub write_driver: Shr<Leafcell>,
     pub column_trigate: Shr<Leafcell>,
+    pub precharge: Shr<Leafcell>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,33 +27,37 @@ pub struct PdkConfig {
 }
 
 impl Pdk {
-    pub fn get_stdcell(&self, kind: StdcellKind, drive_strength: DriveStrength) -> Option<Shr<Stdcell>> {
-        self.stdcells.get(&(kind, drive_strength)).cloned()
+    pub fn get_logicgate(&self, kind: LogicGateKind, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
+        self.logicgates.get(&(kind, drive_strength)).cloned()
     }
 
-    pub fn get_and(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<Stdcell>> {
-        let kind = StdcellKind::And(input_size);
-        self.get_stdcell(kind, drive_strength)
+    pub fn get_and(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
+        let kind = LogicGateKind::And(input_size);
+        self.get_logicgate(kind, drive_strength)
     }
 
-    pub fn get_nand(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<Stdcell>> {
-        let kind = StdcellKind::Nand(input_size);
-        self.get_stdcell(kind, drive_strength)
+    pub fn get_nand(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
+        let kind = LogicGateKind::Nand(input_size);
+        self.get_logicgate(kind, drive_strength)
     }
 
-    pub fn get_or(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<Stdcell>> {
-        let kind = StdcellKind::Or(input_size);
-        self.get_stdcell(kind, drive_strength)
+    pub fn get_or(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
+        let kind = LogicGateKind::Or(input_size);
+        self.get_logicgate(kind, drive_strength)
     }
 
-    pub fn get_nor(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<Stdcell>> {
-        let kind = StdcellKind::Nor(input_size);
-        self.get_stdcell(kind, drive_strength)
+    pub fn get_nor(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
+        let kind = LogicGateKind::Nor(input_size);
+        self.get_logicgate(kind, drive_strength)
     }
 
-    pub fn get_inv(&self, drive_strength: DriveStrength) -> Option<Shr<Stdcell>> {
-        let kind = StdcellKind::Inv;
-        self.get_stdcell(kind, drive_strength)
+    pub fn get_inv(&self, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
+        let kind = LogicGateKind::Inv;
+        self.get_logicgate(kind, drive_strength)
+    }
+
+    pub fn get_dff(&self, drive_strength: DriveStrength) -> Option<Shr<Dff>> {
+        self.dffs.get(&drive_strength).cloned()
     }
 
     pub fn get_bitcell(&self) -> Shr<Leafcell> {
@@ -69,6 +75,10 @@ impl Pdk {
     pub fn get_column_trigate(&self) -> Shr<Leafcell> {
         self.column_trigate.clone()
     }
+
+    pub fn get_precharge(&self) -> Shr<Leafcell> {
+        self.precharge.clone()
+    }
 }
 
 impl Pdk {
@@ -80,19 +90,23 @@ impl Pdk {
         let config: PdkConfig = serde_json::from_str(&config).context("parse pdk config")?;
 
         // load file
-        let stdcell_liberty_path = path.join(&config.stdcell_liberty);
+        let logicgate_liberty_path = path.join(&config.stdcell_liberty);
         let stdcell_spice_path = path.join(&config.stdcell_spice);
         let leafcell_spice_path = path.join(&config.leafcell_spice);
-        let library = LibLibrary::load_file(stdcell_liberty_path).map_err(PdkError::Liberty)?;
+        let library = LibLibrary::load_file(logicgate_liberty_path).map_err(PdkError::Liberty)?;
         let stdcell_spice = Spice::load_from(stdcell_spice_path).map_err(|e| YouRAMError::Message(e.to_string()))?;
         let leafcell_spice = Spice::load_from(leafcell_spice_path).map_err(|e| YouRAMError::Message(e.to_string()))?;
 
-        // extract stdcells
-        let mut stdcells = HashMap::new();
+        // extract logicgates & dff
+        let mut logicgates = HashMap::new();
+        let mut dffs = HashMap::new();
         for cell in library.cells.iter() {
-            if let Some(stdcell) = Self::extract_stdcell(cell, &stdcell_spice) {
-                let key = (stdcell.kind, stdcell.drive_strength);
-                stdcells.insert(key, Shr::new(stdcell));
+            if let Some(dff) = Self::extract_dff(cell, &stdcell_spice) {
+                let key = dff.drive_strength;
+                dffs.insert(key, Shr::new(dff));
+            } else if let Some(logicgate) = Self::extract_logicgate(cell, &stdcell_spice) {
+                let key = (logicgate.kind, logicgate.drive_strength);
+                logicgates.insert(key, Shr::new(logicgate));
             }
         }
 
@@ -105,14 +119,18 @@ impl Pdk {
             = Shr::new(Self::extract_write_driver(&leafcell_spice).context("extract write_driver")?.into());
         let column_trigate
             = Shr::new(Self::extract_column_trigate(&leafcell_spice).context("extract column_trigate")?.into());    
-
+        let precharge
+            = Shr::new(Self::extract_precharge(&leafcell_spice).context("extract precharge")?.into());    
+    
         Ok(Self {
             config,
-            stdcells,
+            logicgates,
+            dffs,
             bitcell,
             sense_amp,
             write_driver,
             column_trigate,
+            precharge,
         })
     }
 }

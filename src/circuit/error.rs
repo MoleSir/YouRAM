@@ -1,4 +1,4 @@
-use super::{DriveStrength, StdcellKind};
+use super::{DriveStrength, LogicGateKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CircuitError {
@@ -12,7 +12,7 @@ pub enum CircuitError {
     PinSizeUnmatch(usize, usize),
 
     #[error("expect '{0}' input but got '{1}'")]
-    StdcellInputPinSizeUnmatch(usize, usize),
+    LogicGateInputPinSizeUnmatch(usize, usize),
 
     #[error("instance '{0}' have not been connected")]
     InstanceNotConnected(String),
@@ -29,11 +29,14 @@ pub enum CircuitError {
     #[error("no exit instance {0} in module {1}")]
     InstanceNotFound(String, String),
 
-    #[error("no exit stdcell with({0}, {1})")]
-    StdcellNotFound(StdcellKind, DriveStrength),
+    #[error("no exit logicgate with({0}, {1})")]
+    LogicGateNotFound(LogicGateKind, DriveStrength),
 
-    #[error("stdcell input order {0} port out of range ")]
-    StdcellInputPortOutOfRange(usize),
+    #[error("no exit dff with({0})")]
+    DffNotFound(DriveStrength),
+
+    #[error("logicgate input order {0} port out of range ")]
+    LogicGateInputPortOutOfRange(usize),
 
     #[error("{0}")]
     Messgae(String),

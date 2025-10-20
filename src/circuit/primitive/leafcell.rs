@@ -3,195 +3,48 @@ use crate::circuit::{Design, Port, Shr};
 
 use super::Primitive;
 
-pub const BITCELL_NAME: &'static str = "bitcell";
-pub const SENSE_AMP_NAME: &'static str = "sense_amp";
-pub const WRITE_DRIVER_NAME: &'static str = "write_driver";
-pub const COLUMN_TRI_GATE_NAME: &'static str = "column_trigate";
-
 pub enum Leafcell {
     Bitcell(Bitcell),
     SenseAmp(SenseAmp),
     WriteDriver(WriteDriver),
     ColumnTriGate(ColumnTriGate),
+    Precharge(Precharge),
 }
 
-pub struct Bitcell {
-    pub bitline: Shr<Port>,
-    pub bitline_bar: Shr<Port>,
-    pub word_line: Shr<Port>,
-    pub vdd: Shr<Port>,
-    pub gnd: Shr<Port>,
-
-    pub ports: Vec<Shr<Port>>,
-    pub netlist: Subckt,
-}
-
-pub struct SenseAmp {
-    pub bitline: Shr<Port>,
-    pub bitline_bar: Shr<Port>,
-    pub data_output: Shr<Port>,
-    pub enable: Shr<Port>,
-    pub vdd: Shr<Port>,
-    pub gnd: Shr<Port>,
-
-    pub ports: Vec<Shr<Port>>,
-    pub netlist: Subckt,
-}
-
-pub struct WriteDriver {
-    pub data_input: Shr<Port>,
-    pub bitline: Shr<Port>,
-    pub bitline_bar: Shr<Port>,
-    pub enable: Shr<Port>,
-    pub vdd: Shr<Port>,
-    pub gnd: Shr<Port>,
-
-    pub ports: Vec<Shr<Port>>,
-    pub netlist: Subckt,
-}
-
-pub struct ColumnTriGate {
-    pub bitline: Shr<Port>,
-    pub bitline_bar: Shr<Port>,
-    pub bitline_output: Shr<Port>,
-    pub bitline_bar_output: Shr<Port>,
-    pub select: Shr<Port>,
-    pub vdd: Shr<Port>,
-    pub gnd: Shr<Port>,
-
-    pub ports: Vec<Shr<Port>>,
-    pub netlist: Subckt,
-}
-
-impl Bitcell {
-    pub fn new(bitline: Shr<Port>, bitline_bar: Shr<Port>, word_line: Shr<Port>, vdd: Shr<Port>, gnd: Shr<Port>, netlist: Subckt) -> Self {
-        let ports = vec![
-            bitline.clone(), bitline_bar.clone(), word_line.clone(), vdd.clone(), gnd.clone(), 
-        ];
-        Self {
-            bitline, bitline_bar, word_line, vdd, gnd, ports, netlist
+macro_rules! define_leafcell {
+    ($name:ident, $($port:ident),+ $(,)?) => {
+        pub struct $name {
+            $(pub $port: Shr<Port>,)+
+            pub ports: ::std::vec::Vec<Shr<Port>>,
+            pub netlist: Subckt,
         }
-    }
-}
 
-impl SenseAmp {
-    pub fn new(
-        bitline: Shr<Port>,
-        bitline_bar: Shr<Port>,
-        data_output: Shr<Port>,
-        enable: Shr<Port>,
-        vdd: Shr<Port>,
-        gnd: Shr<Port>,
-        netlist: Subckt,
-    ) -> Self {
-        let ports = vec![
-            bitline.clone(),
-            bitline_bar.clone(),
-            enable.clone(),
-            vdd.clone(),
-            gnd.clone(),
-        ];
-        Self {
-            bitline,
-            bitline_bar,
-            data_output,
-            enable,
-            vdd,
-            gnd,
-            ports,
-            netlist,
+        impl $name {
+            pub fn new($($port: Shr<Port>,)+ netlist: Subckt) -> Self {
+                let ports = ::std::vec![ $($port.clone(),)+ ];
+                Self { $($port,)+ ports, netlist }
+            }
         }
-    }
-}
 
-impl WriteDriver {
-    pub fn new(
-        data_input: Shr<Port>,
-        bitline: Shr<Port>,
-        bitline_bar: Shr<Port>,
-        enable: Shr<Port>,
-        vdd: Shr<Port>,
-        gnd: Shr<Port>,
-        netlist: Subckt,
-    ) -> Self {
-        let ports = vec![
-            data_input.clone(),
-            bitline.clone(),
-            bitline_bar.clone(),
-            enable.clone(),
-            vdd.clone(),
-            gnd.clone(),
-        ];
-        Self {
-            data_input,
-            bitline,
-            bitline_bar,
-            enable,
-            vdd,
-            gnd,
-            ports,
-            netlist,
+        impl From<$name> for Leafcell {
+            fn from(value: $name) -> Self {
+                Self::$name(value)
+            }
         }
-    }
+    };
 }
 
-impl ColumnTriGate {
-    pub fn new(
-        bitline: Shr<Port>,
-        bitline_bar: Shr<Port>,
-        bitline_output: Shr<Port>,
-        bitline_bar_output: Shr<Port>,
-        select: Shr<Port>,
-        vdd: Shr<Port>,
-        gnd: Shr<Port>,
-        netlist: Subckt,
-    ) -> Self {
-        let ports = vec![
-            bitline.clone(),
-            bitline_bar.clone(),
-            bitline_output.clone(),
-            bitline_bar_output.clone(),
-            select.clone(),
-            vdd.clone(),
-            gnd.clone(),
-        ];
-        Self {
-            bitline,
-            bitline_bar,
-            bitline_output,
-            bitline_bar_output,
-            select,
-            vdd,
-            gnd,
-            ports,
-            netlist,
-        }
-    }
-}
+pub const BITCELL_NAME: &'static str = "bitcell";
+pub const SENSE_AMP_NAME: &'static str = "sense_amp";
+pub const WRITE_DRIVER_NAME: &'static str = "write_driver";
+pub const COLUMN_TRI_GATE_NAME: &'static str = "column_trigate";
+pub const PRECHARGE_NAME: &'static str = "precharge";
 
-impl From<Bitcell> for Leafcell {
-    fn from(value: Bitcell) -> Self {
-        Self::Bitcell(value)
-    }
-}
-
-impl From<WriteDriver> for Leafcell {
-    fn from(value: WriteDriver) -> Self {
-        Self::WriteDriver(value)
-    }
-}
-
-impl From<SenseAmp> for Leafcell {
-    fn from(value: SenseAmp) -> Self {
-        Self::SenseAmp(value)
-    }
-}
-
-impl From<ColumnTriGate> for Leafcell {
-    fn from(value: ColumnTriGate) -> Self {
-        Self::ColumnTriGate(value)
-    }
-}
+define_leafcell!(Bitcell, bitline, bitline_bar, word_line, vdd, gnd);
+define_leafcell!(SenseAmp, bitline, bitline_bar, data_output, enable, vdd, gnd);
+define_leafcell!(WriteDriver, data_input, bitline, bitline_bar, enable, vdd, gnd);
+define_leafcell!(ColumnTriGate, bitline, bitline_bar, bitline_output, bitline_bar_output, select, vdd, gnd);
+define_leafcell!(Precharge, bitline, bitline_bar, enable, vdd);
 
 impl Design for Leafcell {
     fn name(&self) -> crate::circuit::ShrString {
@@ -200,6 +53,7 @@ impl Design for Leafcell {
             Self::SenseAmp(_) => SENSE_AMP_NAME.into(),
             Self::WriteDriver(_) => WRITE_DRIVER_NAME.into(),
             Self::ColumnTriGate(_) => COLUMN_TRI_GATE_NAME.into(),
+            Self::Precharge(_) => PRECHARGE_NAME.into(),
         }
     }
 
@@ -209,6 +63,7 @@ impl Design for Leafcell {
             Self::SenseAmp(l) => &l.ports,
             Self::WriteDriver(l) => &l.ports,
             Self::ColumnTriGate(l) => &l.ports,
+            Self::Precharge(l) => &l.ports,
         }
     }
 }
@@ -220,6 +75,7 @@ impl Primitive for Leafcell {
             Self::SenseAmp(l) => &l.netlist,
             Self::WriteDriver(l) => &l.netlist,
             Self::ColumnTriGate(l) => &l.netlist,
+            Self::Precharge(l) => &l.netlist,
         }
     }
 }

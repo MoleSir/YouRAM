@@ -23,10 +23,6 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let arg_struct_name = format_ident!("{}Arg", struct_name);
 
-    let field_names: Vec<_> = user_fields.iter()
-        .map(|f| &f.ident)
-        .collect();
-
     let mut port_name_functions = Vec::new();
     let mut add_port_codes = Vec::new();
     for port_define in attr.ports.iter() {
@@ -48,6 +44,16 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let code = quote! {
                     module.add_port(#struct_name::#function_name(), crate::circuit::PortDirection::#direction)?;
                 };
+                let code = if let Some(cond) = &port_define.condition {
+                    quote! {
+                        if #cond {
+                            #code
+                        }
+                    }
+                } else {
+                    code
+                };
+
                 add_port_codes.push(code);
             }
             1 => {
@@ -67,27 +73,82 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         module.add_port(#struct_name::#function_name(v), crate::circuit::PortDirection::#direction)?;
                     }
                 };
+                let code = if let Some(cond) = &port_define.condition {
+                    let code = quote! {
+                        if #cond {
+                            #code
+                        }
+                    };
+                    code
+                } else {
+                    code
+                };
+
+                
+                add_port_codes.push(code);
+            }
+            2 => {
+                let format_arg = port_define.pattern.clone();
+                let f1 = format_ident!("{}", fields[0]);
+                let f2 = format_ident!("{}", fields[1]);
+                let direction = &port_define.direction;
+        
+                let code = quote! {
+                    pub fn #function_name(#f1: usize, #f2: usize) -> crate::circuit::ShrString {
+                        use crate::format_shr;
+                        format_shr!(#format_arg)
+                    }
+                };
+                port_name_functions.push(code);
+        
+                let mut code = quote! {
+                    for v1 in 0..module.args.#f1 {
+                        for v2 in 0..module.args.#f2 {
+                            module.add_port(
+                                #struct_name::#function_name(v1, v2),
+                                crate::circuit::PortDirection::#direction
+                            )?;
+                        }
+                    }
+                };
+        
+                if let Some(cond) = &port_define.condition {
+                    code = quote! {
+                        if #cond {
+                            #code
+                        }
+                    };
+                }
+        
                 add_port_codes.push(code);
             }
             _ => panic!("Unsupport"),
         }
     }
+    
+    let explicit_field_names: Vec<_> = user_fields.iter()
+        .filter(|f| f.attrs.is_empty())
+        .map(|f| &f.ident)
+        .collect();
 
-    let field_fmt: String = field_names
+
+    let field_fmt: String = explicit_field_names
         .iter()
         .map(|_| "{}")
         .collect::<Vec<_>>()
         .join("_");
 
+
     let format_string = format!("{}_{}", struct_name_scase, field_fmt);
     let format_lit = syn::LitStr::new(&format_string, struct_name.span());
-    let self_fields: Vec<proc_macro2::TokenStream> = field_names
+    let self_fields: Vec<proc_macro2::TokenStream> = explicit_field_names
         .iter()
         .map(|ident| quote! { self.#ident })
         .collect();
 
     quote! {
-        #[derive(Debug)]
+        pub use derive_new::new;
+        #[derive(Debug, new)]
         pub struct #arg_struct_name {
             #user_fields
         }

@@ -2,15 +2,15 @@ use youram_macro::module;
 use crate::{check_arg, circuit::CircuitFactory, YouRAMResult};
 
 #[module(
-    bitline:      ("bl{colum_size}", InOut),
-    bitline_bar:  ("br{colum_size}", InOut),
+    bitline:      ("bl{column_size}", InOut),
+    bitline_bar:  ("br{column_size}", InOut),
     wordline:     ("wl{row_size}", Input),
     vdd:          ("vdd", Source),
     gnd:          ("gnd", Source),
 )]
 pub struct BitcellArray {
     pub row_size: usize,
-    pub colum_size: usize,   
+    pub column_size: usize,   
 }
 
 impl BitcellArray {
@@ -37,10 +37,10 @@ impl BitcellArray {
     */     
     pub fn build(&mut self, factory: &mut CircuitFactory) -> YouRAMResult<()> {
         check_arg!(self.args.row_size >= 1, "row size {} < 1", self.args.row_size);
-        check_arg!(self.args.colum_size >= 1, "column size {} < 1", self.args.colum_size);
+        check_arg!(self.args.column_size >= 1, "column size {} < 1", self.args.column_size);
 
         for row in 0..self.args.row_size {
-            for col in 0..self.args.colum_size {
+            for col in 0..self.args.column_size {
                 self.link_bitcell_instance(
                     factory, 
                     format!("bitcell_{}_{}", row, col), 
