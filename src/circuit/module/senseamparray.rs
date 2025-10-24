@@ -6,8 +6,8 @@ use crate::{circuit::CircuitFactory, format_shr, YouRAMResult};
     bitline_bar:   ("br{column_size}", InOut),
     data_output:   ("dout{column_size}", Output),
     enable:        ("sa_en", Input),
-    vdd:           ("vdd", Source),
-    gnd:           ("gnd", Source),
+    vdd:           ("vdd", Vdd),
+    gnd:           ("gnd", Gnd),
 )]
 pub struct SenseAmpArray {
     pub column_size: usize,

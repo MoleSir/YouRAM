@@ -16,8 +16,8 @@ use super::{BitcellArrayRecursiveArg, PrechargeArrayArg};
 
     replical_bitline:     ("rbl", InOut),
 
-    vdd:                  ("vdd", Source),
-    gnd:                  ("gnd", Source),
+    vdd:                  ("vdd", Vdd),
+    gnd:                  ("gnd", Gnd),
 )]
 pub struct Bank {
     pub row_size: usize,
@@ -116,7 +116,7 @@ impl Bank {
             Self::replical_bitline_pn(),
             rbr_net.clone(),
             Self::write_driver_enable_pn(),
-            Self::gnd_pn(),
+            Self::vdd_pn(),
             Self::gnd_pn(),
         )?;
 

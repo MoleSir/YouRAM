@@ -4,8 +4,8 @@ use crate::{circuit::{CircuitFactory, DriveStrength, LogicGateKind}, YouRAMResul
 #[module(
     input:  ("A", Input),
     output: ("Z", Output),
-    vdd:    ("vdd", Source),
-    gnd:    ("gnd", Source),
+    vdd:    ("vdd", Vdd),
+    gnd:    ("gnd", Gnd),
 )]
 pub struct Buffer {
     pub strength: DriveStrength,

@@ -11,8 +11,8 @@ use crate::{check_arg, circuit::{AndArrayArg, Bank, BankArg, CircuitFactory, Con
     data_input:    ("din{word_width}", Input),
     data_output:   ("dout{word_width}", Input),
 
-    vdd:           ("vdd", Source),
-    gnd:           ("gnd", Source),
+    vdd:           ("vdd", Vdd),
+    gnd:           ("gnd", Gnd),
 )]
 pub struct Core {
     pub row_size: usize,

@@ -7,8 +7,8 @@ use crate::{circuit::CircuitFactory, format_shr, YouRAMResult};
     bitline_bar:          ("br{select_size}", InOut),
     bitline_selected:     ("bl", InOut),
     bitline_bar_selected: ("br", InOut),
-    vdd:                  ("vdd", Source),
-    gnd:                  ("gnd", Source),
+    vdd:                  ("vdd", Vdd),
+    gnd:                  ("gnd", Gnd),
 )]
 pub struct ColumnMux {
     pub select_size: usize,

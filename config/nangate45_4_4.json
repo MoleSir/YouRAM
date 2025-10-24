@@ -1,0 +1,13 @@
+{
+    "pdk_path" : "./platforms/nangate45",
+    "output_path" : "./output/nangate45",
+
+    "address_width" : 4,
+    "word_width" : 4,
+
+    "function_test": {
+        "period": "10ns",
+        "policy": "random",
+        "command": "ngspice"
+    }
+}

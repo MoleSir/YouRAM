@@ -1,7 +1,5 @@
 use derive_builder::Builder;
-
-use reda_unit::Number;
-
+use reda_unit::{Time, Voltage};
 use super::Meas;
 
 #[derive(Debug, Clone, Copy)]
@@ -17,13 +15,13 @@ pub struct DelayMeas {
 
     pub trig_net_name: String,
     pub trig_edge: Edge,
-    pub trig_voltage: Number,
-    pub trig_time_delay: Number,
+    pub trig_voltage: Voltage,
+    pub trig_time_delay: Time,
 
     pub targ_net_name: String,
     pub targ_edge: Edge,
-    pub targ_voltage: Number,
-    pub targ_time_delay: Number,
+    pub targ_voltage: Voltage,
+    pub targ_time_delay: Time,
 }
 
 impl Meas for DelayMeas {

@@ -14,8 +14,8 @@ use crate::{circuit::{CircuitFactory, DriveStrength}, format_shr, YouRAMResult};
     address_reg:      ("addr_r{address_width}", Output),
     data_input_reg:   ("din_r{word_width}", Output),
 
-    vdd:              ("vdd", Source),
-    gnd:              ("gnd", Source),
+    vdd:              ("vdd", Vdd),
+    gnd:              ("gnd", Gnd),
 )]
 pub struct InputDffs {
     pub address_width: usize,

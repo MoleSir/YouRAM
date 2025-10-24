@@ -6,8 +6,8 @@ const MAX_FANOUT_SIZE: usize = 1024;
 #[module(
     input:  ("in", Input),
     output: ("out{fanout_size}", Output),
-    vdd:    ("vdd", Source),
-    gnd:    ("gnd", Source),
+    vdd:    ("vdd", Vdd),
+    gnd:    ("gnd", Gnd),
 )]
 pub struct FanoutBuffer {
     pub fanout_size: usize,

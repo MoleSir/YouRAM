@@ -9,14 +9,14 @@
 ********************************************************************************
 .SUBCKT bitcell bl br wl vdd gnd
 * Inverter 1
-MM0 Q_bar Q gnd gnd NMOS_VTG W=205.00n L=50n
-MM4 Q_bar Q vdd vdd PMOS_VTG W=90n L=50n
+MM0 Q_bar Q gnd gnd NMOS_VTL W=205.00n L=50n
+MM4 Q_bar Q vdd vdd PMOS_VTL W=90n L=50n
 * Inverer 2
-MM1 Q Q_bar gnd gnd NMOS_VTG W=205.00n L=50n 
-MM5 Q Q_bar vdd vdd PMOS_VTG W=90n L=50n
+MM1 Q Q_bar gnd gnd NMOS_VTL W=205.00n L=50n 
+MM5 Q Q_bar vdd vdd PMOS_VTL W=90n L=50n
 * Access transistors
-MM3 bl wl Q gnd NMOS_VTG W=135.00n L=50n
-MM2 br wl Q_bar gnd NMOS_VTG W=135.00n L=50n 
+MM3 bl wl Q gnd NMOS_VTL W=135.00n L=50n
+MM2 br wl Q_bar gnd NMOS_VTL W=135.00n L=50n 
 .ENDS bitcell
 
 ********************************************************************************
@@ -29,17 +29,17 @@ MM2 br wl Q_bar gnd NMOS_VTG W=135.00n L=50n
 *                                                                              *
 ********************************************************************************
 .SUBCKT sense_amp bl br dout en vdd gnd
-M_1 dint net_1 vdd vdd pmos_vtg w=540.0n l=50.0n
-M_3 net_1 dint vdd vdd pmos_vtg w=540.0n l=50.0n
-M_2 dint net_1 net_2 gnd nmos_vtg w=270.0n l=50.0n
-M_8 net_1 dint net_2 gnd nmos_vtg w=270.0n l=50.0n
-M_5 bl en dint vdd pmos_vtg w=720.0n l=50.0n
-M_6 br en net_1 vdd pmos_vtg w=720.0n l=50.0n
-M_7 net_2 en gnd gnd nmos_vtg w=270.0n l=50.0n
-M_9 dout_bar dint vdd vdd pmos_vtg w=180.0n l=50.0n
-M_10 dout_bar dint gnd gnd nmos_vtg w=90.0n l=50.0n
-M_11 dout dout_bar vdd vdd pmos_vtg w=540.0n l=50.0n
-M_12 dout dout_bar gnd gnd nmos_vtg w=270.0n l=50.0n
+M_1 dint net_1 vdd vdd pmos_vtl w=540.0n l=50.0n
+M_3 net_1 dint vdd vdd pmos_vtl w=540.0n l=50.0n
+M_2 dint net_1 net_2 gnd nmos_vtl w=270.0n l=50.0n
+M_8 net_1 dint net_2 gnd nmos_vtl w=270.0n l=50.0n
+M_5 bl en dint vdd pmos_vtl w=720.0n l=50.0n
+M_6 br en net_1 vdd pmos_vtl w=720.0n l=50.0n
+M_7 net_2 en gnd gnd nmos_vtl w=270.0n l=50.0n
+M_9 dout_bar dint vdd vdd pmos_vtl w=180.0n l=50.0n
+M_10 dout_bar dint gnd gnd nmos_vtl w=90.0n l=50.0n
+M_11 dout dout_bar vdd vdd pmos_vtl w=540.0n l=50.0n
+M_12 dout dout_bar gnd gnd nmos_vtl w=270.0n l=50.0n
 .ENDS sense_amp
 
 ********************************************************************************
@@ -53,20 +53,20 @@ M_12 dout dout_bar gnd gnd nmos_vtg w=270.0n l=50.0n
 ********************************************************************************
 .SUBCKT write_driver din bl br en vdd gnd
 *inverters for enable and data input
-minP bl_bar din vdd vdd pmos_vtg w=360.000000n l=50.000000n
-minN bl_bar din gnd gnd nmos_vtg w=180.000000n l=50.000000n
-moutP en_bar en vdd vdd pmos_vtg w=360.000000n l=50.000000n
-moutN en_bar en gnd gnd nmos_vtg w=180.000000n l=50.000000n
+minP bl_bar din vdd vdd pmos_vtl w=360.000000n l=50.000000n
+minN bl_bar din gnd gnd nmos_vtl w=180.000000n l=50.000000n
+moutP en_bar en vdd vdd pmos_vtl w=360.000000n l=50.000000n
+moutN en_bar en gnd gnd nmos_vtl w=180.000000n l=50.000000n
 *tristate for BL
-mout0P int1 bl_bar vdd vdd pmos_vtg w=360.000000n l=50.000000n
-mout0P2 bl en_bar int1 vdd pmos_vtg w=360.000000n l=50.000000n
-mout0N bl en int2 gnd nmos_vtg w=180.000000n l=50.000000n
-mout0N2 int2 bl_bar gnd gnd nmos_vtg w=180.000000n l=50.000000n
+mout0P int1 bl_bar vdd vdd pmos_vtl w=360.000000n l=50.000000n
+mout0P2 bl en_bar int1 vdd pmos_vtl w=360.000000n l=50.000000n
+mout0N bl en int2 gnd nmos_vtl w=180.000000n l=50.000000n
+mout0N2 int2 bl_bar gnd gnd nmos_vtl w=180.000000n l=50.000000n
 *tristate for BR
-mout1P int3 din vdd vdd pmos_vtg w=360.000000n l=50.000000n
-mout1P2 br en_bar int3 vdd pmos_vtg w=360.000000n l=50.000000n
-mout1N br en int4 gnd nmos_vtg w=180.000000n l=50.000000n
-mout1N2 int4 din gnd gnd nmos_vtg w=180.000000n l=50.000000n
+mout1P int3 din vdd vdd pmos_vtl w=360.000000n l=50.000000n
+mout1P2 br en_bar int3 vdd pmos_vtl w=360.000000n l=50.000000n
+mout1N br en int4 gnd nmos_vtl w=180.000000n l=50.000000n
+mout1N2 int4 din gnd gnd nmos_vtl w=180.000000n l=50.000000n
 .ENDS write_driver
 
 
@@ -81,14 +81,14 @@ mout1N2 int4 din gnd gnd nmos_vtg w=180.000000n l=50.000000n
 ********************************************************************************
 .subckt column_trigate bl br bl_out br_out sel vdd gnd
 * for bl
-M1000 bl sel_bar bl_out vdd pmos_vtg w=180.0n l=50.0n
-M1001 bl sel bl_out gnd nmos_vtg w=90.0n l=50.0n
+M1000 bl sel_bar bl_out vdd pmos_vtl w=180.0n l=50.0n
+M1001 bl sel bl_out gnd nmos_vtl w=90.0n l=50.0n
 * for br
-M1002 br sel_bar br_out vdd pmos_vtg w=180.0n l=50.0n
-M1003 br sel br_out gnd nmos_vtg w=90.0n l=50.0n
+M1002 br sel_bar br_out vdd pmos_vtl w=180.0n l=50.0n
+M1003 br sel br_out gnd nmos_vtl w=90.0n l=50.0n
 * inv
-Minv_nmos sel_bar sel gnd gnd nmos_vtg w=0.10u l=0.05u
-Minv_pmos sel_bar sel vdd vdd pmos_vtg w=0.20u l=0.05u
+Minv_nmos sel_bar sel gnd gnd nmos_vtl w=0.10u l=0.05u
+Minv_pmos sel_bar sel vdd vdd pmos_vtl w=0.20u l=0.05u
 .ends column_trigate
 
 
@@ -102,7 +102,7 @@ Minv_pmos sel_bar sel vdd vdd pmos_vtg w=0.20u l=0.05u
 *                                                                              *
 ********************************************************************************
 .SUBCKT precharge bl br en_bar vdd
-MM1 vdd en_bar bl vdd PMOS_VTG w=0.27u l=0.05u
-MM2 vdd en_bar br vdd PMOS_VTG w=0.27u l=0.05u
-MM3 bl en_bar br vdd PMOS_VTG w=0.27u l=0.05u
+MM1 vdd en_bar bl vdd PMOS_VTL w=0.27u l=0.05u
+MM2 vdd en_bar br vdd PMOS_VTL w=0.27u l=0.05u
+MM3 bl en_bar br vdd PMOS_VTL w=0.27u l=0.05u
 .ENDS precharge

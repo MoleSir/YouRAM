@@ -1,5 +1,10 @@
 {
     "stdcell_spice": "stdcell.cdl",
     "stdcell_liberty": "stdcell.lib",
-    "leafcell_spice": "leafcell.cdl"
+    "leafcell_spice": "leafcell.cdl",
+    "models" : {
+        "TT" : { "nmos": "model/nom/nmos.sp", "pmos": "model/nom/pmos.sp"},
+        "FF" : { "nmos": "model/ff/nmos.sp", "pmos": "model/ff/pmos.sp"},
+        "SS" : { "nmos": "model/ss/nmos.sp", "pmos": "model/ss/pmos.sp"}
+    }
 }

@@ -5,8 +5,8 @@ use crate::{check_arg, circuit::CircuitFactory, format_shr, YouRAMResult};
     replical_bitline:     ("rbl", InOut),
     replical_bitline_bar: ("rbr", InOut),
     wordline_enbale:      ("wl", Input),
-    vdd:                  ("vdd", Source),
-    gnd:                  ("gnd", Source),
+    vdd:                  ("vdd", Vdd),
+    gnd:                  ("gnd", Gnd),
 )]
 pub struct ReplicaBitcellArray {
     pub bitcell_size: usize,

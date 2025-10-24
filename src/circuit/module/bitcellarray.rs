@@ -5,8 +5,8 @@ use crate::{check_arg, circuit::CircuitFactory, YouRAMResult};
     bitline:      ("bl{column_size}", InOut),
     bitline_bar:  ("br{column_size}", InOut),
     wordline:     ("wl{row_size}", Input),
-    vdd:          ("vdd", Source),
-    gnd:          ("gnd", Source),
+    vdd:          ("vdd", Vdd),
+    gnd:          ("gnd", Gnd),
 )]
 pub struct BitcellArray {
     pub row_size: usize,

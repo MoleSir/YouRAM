@@ -6,8 +6,8 @@ use crate::{circuit::CircuitFactory, format_shr, YouRAMResult};
     bitline:             ("bl{column_size}", InOut),
     bitline_bar:         ("br{column_size}", InOut),
     enable:              ("we_en", Input),
-    vdd:                 ("vdd", Source),
-    gnd:                 ("gnd", Source),
+    vdd:                 ("vdd", Vdd),
+    gnd:                 ("gnd", Gnd),
 )]
 pub struct WriteDriverArray {
     pub column_size: usize,

@@ -1,19 +1,20 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use reda_unit::Number;
-use crate::{ErrorContext, YouRAMResult};
-use super::{Executer, Meas, SimulateError};
+use reda_unit::{Capacitance, Temperature, Time, Voltage};
+use crate::YouRAMResult;
+use crate::simulate::{Meas, SimulateError};
 
-pub struct Simulator {
-    pub simulate_path: PathBuf,
-    pub file: File,
-    pub measurements: Vec<Box<dyn Meas>>, 
+use super::SpiceExector;
+
+pub struct SpiceWritor {
+    simulate_path: PathBuf,
+    file: File,
+    measurements: Vec<Box<dyn Meas>>, 
 }
 
-impl Simulator {
-    pub fn create<P: AsRef<Path>>(simulate_path: P) -> YouRAMResult<Self> {
+impl SpiceWritor {
+    pub fn open<P: AsRef<Path>>(simulate_path: P) -> YouRAMResult<Self> {
         let simulate_path = simulate_path.as_ref();
         let file = File::create(simulate_path)?;
         Ok(Self {
@@ -22,37 +23,20 @@ impl Simulator {
             measurements: vec![],
         })
     }
-}
 
-impl Simulator {
-    pub fn simulate(&mut self, exceuter: Executer, temp_folder: impl AsRef<Path>) -> YouRAMResult<HashMap<String, Number>> {
-        let result_path = exceuter.execute(&self.simulate_path, temp_folder).context("Execute simualte")?;
-        self.get_meas_results(&result_path).context("Get meas result")
-    }   
-
-    fn get_meas_results(&mut self, result_path: impl AsRef<Path>) -> YouRAMResult<HashMap<String, Number>> {
+    pub fn close(mut self) -> YouRAMResult<SpiceExector> {
         self.file.flush()?;
-        let result_path = result_path.as_ref();
-        let content = std::fs::read_to_string(result_path).context(format!("read result file '{:?}'", result_path))?;
-
-        let mut results = HashMap::new();
-        for meas in self.measurements.iter() {
-            let value = meas.get_result(&content).map_err(SimulateError::MeasError)?;
-            results.insert(meas.name().to_string(), value);
-        }
-
-        Ok(results)
+        Ok(SpiceExector {
+            simulate_path: self.simulate_path,
+            measurements: self.measurements
+        })
     }
 }
 
-impl Simulator {
+#[allow(dead_code)]
+impl SpiceWritor {
     pub fn write_content(&mut self, content: impl AsRef<str>) -> YouRAMResult<()> {
         write!(self.file, "{}", content.as_ref())?;
-        Ok(())
-    }
-
-    pub fn write_char(&mut self, ch: char) -> YouRAMResult<()> {
-        write!(self.file, "{}", ch)?;
         Ok(())
     }
 
@@ -71,8 +55,8 @@ impl Simulator {
         Ok(())
     }
 
-    pub fn write_temperature(&mut self, temp: Number) -> YouRAMResult<()> {
-        writeln!(self.file, ".TEMP {}", temp)?;
+    pub fn write_temperature(&mut self, temp: impl Into<Temperature>) -> YouRAMResult<()> {
+        writeln!(self.file, ".TEMP {}", temp.into())?;
         Ok(())
     }
 
@@ -80,7 +64,7 @@ impl Simulator {
         &mut self,
         module_name: impl AsRef<str>,
         instance_name: impl AsRef<str>,
-        nets: &[impl AsRef<str>],
+        nets: impl Iterator<Item = impl AsRef<str>>,
     ) -> YouRAMResult<()> {
         write!(self.file, "X{}", instance_name.as_ref())?;
         for net in nets {
@@ -94,15 +78,15 @@ impl Simulator {
         &mut self,
         voltage_name: impl AsRef<str>,
         net_name: impl AsRef<str>,
-        times: &[Number],
-        voltages: &[Number],
+        times: impl ExactSizeIterator<Item = Time>,
+        voltages: impl ExactSizeIterator<Item = Voltage>,
     ) -> YouRAMResult<()> {
         if times.len() != voltages.len() {
             return Err(SimulateError::TimesAndVoltageUnmatch(times.len(), voltages.len()))?;
         }
 
         write!(self.file, "V{} {} 0 PWL (", voltage_name.as_ref(), net_name.as_ref())?;
-        for (t, v) in times.iter().zip(voltages) {
+        for (t, v) in times.zip(voltages) {
             write!(self.file, "{} {} ", t, v)?;
         }
         writeln!(self.file, ")")?;
@@ -114,10 +98,11 @@ impl Simulator {
         &mut self,
         voltage_name: impl AsRef<str>,
         net_name: impl AsRef<str>,
-        times: &[Number],
-        voltages: &[Number],
-        slew: Number,
+        times: &[Time],
+        voltages: &[Voltage],
+        slew: impl Into<Time>,
     ) -> YouRAMResult<()> {
+        let slew = slew.into();
         if times.len() != voltages.len() {
             return Err(SimulateError::TimesAndVoltageUnmatch(times.len(), voltages.len()))?;
         }
@@ -143,22 +128,22 @@ impl Simulator {
         &mut self,
         voltage_name: impl AsRef<str>,
         net_name: impl AsRef<str>,
-        init_voltage: Number,
-        pulse_voltage: Number,
-        delay: Number,
-        rise: Number,
-        fall: Number,
-        width: Number,
-        period: Number,
+        init_voltage: impl Into<Voltage>,
+        pulse_voltage: impl Into<Voltage>,
+        delay: impl Into<Time>,
+        rise: impl Into<Time>,
+        fall: impl Into<Time>,
+        width: impl Into<Time>,
+        period: impl Into<Time>,
     ) -> YouRAMResult<()> {
         writeln!(
             self.file,
             "V{} {} 0 PULSE({} {} {} {} {} {} {})",
             voltage_name.as_ref(),
             net_name.as_ref(),
-            init_voltage, pulse_voltage,
-            delay, rise, fall,
-            width, period
+            init_voltage.into(), pulse_voltage.into(),
+            delay.into(), rise.into(), fall.into(),
+            width.into(), period.into()
         )?;
 
         Ok(())
@@ -168,9 +153,9 @@ impl Simulator {
         &mut self,
         voltage_name: impl AsRef<str>,
         net_name: impl AsRef<str>,
-        voltage: Number,
+        voltage: impl Into<Voltage>,
     ) -> YouRAMResult<()> {
-        writeln!(self.file, "V{} {} 0 {}", voltage_name.as_ref(), net_name.as_ref(), voltage)?;
+        writeln!(self.file, "V{} {} 0 {}", voltage_name.as_ref(), net_name.as_ref(), voltage.into())?;
         Ok(())
     }
 
@@ -179,14 +164,14 @@ impl Simulator {
         name: impl AsRef<str>,
         n1: impl AsRef<str>,
         n2: impl AsRef<str>,
-        value: Number,
+        value: impl Into<Capacitance>,
     ) -> YouRAMResult<()> {
-        writeln!(self.file, "C{} {} {} {}", name.as_ref(), n1.as_ref(), n2.as_ref(), value)?;
+        writeln!(self.file, "C{} {} {} {}", name.as_ref(), n1.as_ref(), n2.as_ref(), value.into())?;
         Ok(())
     }
 
-    pub fn write_trans(&mut self, step: Number, start: Number, end: Number) -> YouRAMResult<()> {
-        writeln!(self.file, ".TRAN {} {} {}", step, end, start)?;
+    pub fn write_trans(&mut self, step: impl Into<Time>, start: impl Into<Time>, end: impl Into<Time>) -> YouRAMResult<()> {
+        writeln!(self.file, ".TRAN {} {} {}", step.into(), end.into(), start.into())?;
         Ok(())
     }
 
@@ -199,29 +184,11 @@ impl Simulator {
 
 #[cfg(test)]
 mod tests {
-    use crate::simulate::MeasError;
-
     use super::*;
     use std::io::Read;
-    use reda_unit::num;
+    use reda_unit::{num, t, v};
     use tempfile::NamedTempFile;
     use std::fs::OpenOptions;
-
-    struct DummyMeas;
-
-    impl Meas for DummyMeas {
-        fn write_command(&self, out: &mut dyn std::io::Write) -> std::io::Result<()> {
-            writeln!(out, ".MEAS TRAN dummy FIND V(out) AT=5n")
-        }
-
-        fn get_result(&self, _content: &str) -> Result<Number, MeasError> {
-            Ok(num!( 42 n ))
-        }
-
-        fn name(&self) -> &str {
-            "dummy"
-        }
-    }
 
     fn read_file_to_string(path: &PathBuf) -> String {
         let mut f = std::fs::File::open(path).unwrap();
@@ -236,7 +203,7 @@ mod tests {
         let path = tmp.path().to_path_buf();
 
         let file = OpenOptions::new().read(true).write(true).open(&path).unwrap();
-        let mut sim = Simulator {
+        let mut sim = SpiceWritor {
             simulate_path: path.clone(),
             file,
             measurements: vec![],
@@ -261,7 +228,7 @@ mod tests {
         let path = tmp.path().to_path_buf();
         let file = OpenOptions::new().read(true).write(true).open(&path).unwrap();
 
-        let mut sim = Simulator {
+        let mut sim = SpiceWritor {
             simulate_path: path.clone(),
             file,
             measurements: vec![],
@@ -276,8 +243,8 @@ mod tests {
 
         sim.write_pwl_voltage(
             "IN", "in", 
-            &[num!(0), num!(1 n)], 
-            &[num!(0), num!(1.8)]
+            [t!(0), t!(1 n)].into_iter(), 
+            [v!(0), v!(1.8)].into_iter(), 
         ).unwrap();
 
         sim.file.flush().unwrap();
@@ -294,41 +261,18 @@ mod tests {
         let path = tmp.path().to_path_buf();
         let file = OpenOptions::new().read(true).write(true).open(&path).unwrap();
 
-        let mut sim = Simulator {
+        let mut sim = SpiceWritor {
             simulate_path: path.clone(),
             file,
             measurements: vec![],
         };
 
-        sim.write_instance("inv", "inv0", &["in", "out", "vdd", "gnd"]).unwrap();
+        sim.write_instance("inv", "inv0", ["in", "out", "vdd", "gnd"].iter()).unwrap();
         sim.write_capacitance("load", "out", "gnd", num!(0.01)).unwrap();
         sim.file.flush().unwrap();
 
         let content = read_file_to_string(&path);
         assert!(content.contains("Xinv0 in out vdd gnd inv"));
         assert!(content.contains("Cload out gnd 0.01"));
-    }
-
-    #[test]
-    fn test_measurement_written_and_parsed() {
-        let tmp = NamedTempFile::new().unwrap();
-        let path = tmp.path().to_path_buf();
-        let file = OpenOptions::new().read(true).write(true).open(&path).unwrap();
-
-        let mut sim = Simulator {
-            simulate_path: path.clone(),
-            file,
-            measurements: vec![],
-        };
-
-        sim.write_measurement(Box::new(DummyMeas)).unwrap();
-        sim.file.flush().unwrap();
-
-        let content = read_file_to_string(&path);
-        assert!(content.contains(".MEAS TRAN dummy FIND"));
-
-        // simulate dummy
-        let results = sim.get_meas_results(path).unwrap();
-        assert_eq!(results["dummy"], num!(42 n));
     }
 }

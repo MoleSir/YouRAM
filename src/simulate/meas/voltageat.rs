@@ -1,19 +1,19 @@
-use reda_unit::Number;
+use reda_unit::Time;
 use super::Meas;
 
 #[derive(Debug)]
 pub struct VoltageAtMeas {
     pub name: String,
     pub net_name: String,
-    pub meas_time: Number,
+    pub meas_time: Time,
 }
 
 impl VoltageAtMeas {
-    pub fn new<S1, S2, N>(name: S1, net_name: S2, meas_time: N) -> Self 
+    pub fn new<S1, S2, T>(name: S1, net_name: S2, meas_time: T) -> Self 
     where 
         S1: Into<String>,
         S2: Into<String>,
-        N:  Into<Number>
+        T:  Into<Time>
     {
         Self { name: name.into(), net_name: net_name.into(), meas_time: meas_time.into() }
     }

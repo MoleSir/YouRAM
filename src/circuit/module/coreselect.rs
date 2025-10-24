@@ -10,8 +10,8 @@ use super::DecoderArg;
     chip_sel_bar_core:     ("csb_core{core_size}", Output),
     data_output:           ("dout{word_width}", Output),
 
-    vdd:                   ("vdd", Source),
-    gnd:                   ("gnd", Source),
+    vdd:                   ("vdd", Vdd),
+    gnd:                   ("gnd", Gnd),
 )]
 pub struct CoreSelector {
     pub address_width: usize,

@@ -1,15 +1,16 @@
 use crate::YouRAMResult;
-use super::Execute;
+use super::ExecuteCommand;
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct Spectre;
 
-impl Execute for Spectre {
-    fn simulate_command(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<String> {
+impl ExecuteCommand for Spectre {
+    fn simulate_command(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<String> {
         Ok(format!(
             "spectre {} -outdir {} > /dev/null 2>&1",
-            sim_filepath.as_ref().display(),
-            temp_folder.as_ref().display(),
+            sim_filepath.display(),
+            temp_folder.display(),
         ))
     }
 }

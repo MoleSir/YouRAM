@@ -5,7 +5,7 @@ use crate::{circuit::CircuitFactory, format_shr, YouRAMResult};
     bitline:       ("bl{column_size}", InOut),
     bitline_bar:   ("br{column_size}", InOut),
     enable:        ("p_en_bar", Input),
-    vdd:           ("vdd", Source),
+    vdd:           ("vdd", Vdd),
 )]
 pub struct PrechargeArray {
     pub column_size: usize,

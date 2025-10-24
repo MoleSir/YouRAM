@@ -1,43 +1,46 @@
 mod ngspice;
 mod spectre;
 pub use ngspice::*;
+use reda_unit::Number;
 pub use spectre::*;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::YouRAMResult;
+use crate::{ErrorContext, YouRAMResult};
 use super::error::SimulateError;
+use super::Meas;
 
-pub enum Executer {
-    Ngspice,
-    Spectre,
+pub struct SpiceExector {
+    pub simulate_path: PathBuf,
+    pub measurements: Vec<Box<dyn Meas>>,
 }
 
-impl Executer {
-    pub fn from(execute: impl AsRef<str>) -> YouRAMResult<Self> {
-    let execute = execute.as_ref();
-        match execute {
-            "ngspice" => Ok(Self::Ngspice),
-            "spectre" => Ok(Self::Spectre),
-            _ => Err(SimulateError::UnsupportExecute(execute.to_string()))?,
-        }
-    }
+impl SpiceExector {
+    pub fn simulate(&mut self, execute: impl ExecuteCommand, temp_folder: &Path) -> YouRAMResult<HashMap<String, Number>> {
+        let result_path = execute.execute(&self.simulate_path, temp_folder).context("Execute simualte")?;
+        self.get_meas_results(&result_path).context("Get meas result")
+    }   
 
-    pub fn execute(&self, sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<PathBuf> {
-        match self {
-            Self::Ngspice => NgSpice::execute(sim_filepath, temp_folder),
-            Self::Spectre => Spectre::execute(sim_filepath, temp_folder),
+    fn get_meas_results(&mut self, result_path: &Path) -> YouRAMResult<HashMap<String, Number>> {
+        let content = std::fs::read_to_string(result_path).context(format!("read result file '{:?}'", result_path))?;
+
+        let mut results = HashMap::new();
+        for meas in self.measurements.iter() {
+            let value = meas.get_result(&content).map_err(SimulateError::MeasError)?;
+            results.insert(meas.name().to_string(), value);
         }
+
+        Ok(results)
     }
 }
 
-pub trait Execute {
+pub trait ExecuteCommand {
     /// Return the simulate command to execute 
-    fn simulate_command(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<String>;
+    fn simulate_command(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<String>;
 
     /// Return the meas filepath after simulate
-    fn meas_result_filepath(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<PathBuf> {
-        let sim_filepath = sim_filepath.as_ref();
-        let temp_folder = temp_folder.as_ref().to_path_buf();
+    fn meas_result_filepath(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<PathBuf> {
+        let temp_folder = temp_folder.to_path_buf();
 
         let filename = sim_filepath
             .file_name()
@@ -48,11 +51,11 @@ pub trait Execute {
         Ok(temp_folder.join(filename)) 
     }
 
-    fn execute(sim_filepath: impl AsRef<Path>, temp_folder: impl AsRef<Path>) -> YouRAMResult<PathBuf> {
+    fn execute(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<PathBuf> {
         let sim_filepath = sim_filepath.as_ref();
         let temp_folder = temp_folder.as_ref();
 
-        let command = Self::simulate_command(sim_filepath, temp_folder)?;
+        let command = self.simulate_command(sim_filepath, temp_folder)?;
         let status = Command::new("sh")
             .arg("-c")
             .arg(&command)
@@ -60,9 +63,15 @@ pub trait Execute {
             .map_err(|e| SimulateError::ExecuteError(command.clone(), e.to_string()))?;
 
         match status.code() {
-            Some(0) => Ok(Self::meas_result_filepath(sim_filepath, temp_folder)?),
+            Some(0) => Ok(self.meas_result_filepath(sim_filepath, temp_folder)?),
             Some(code) => Err(SimulateError::ExecuteError(command.clone(), format!("Command returns '{}'", code)))?,
             None => Err(SimulateError::ExecuteError(command.clone(), "Command quit unnormal".into()))?,
         }
+    }
+}
+
+impl ExecuteCommand for Box<dyn ExecuteCommand> {
+    fn simulate_command(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<String> {
+        self.as_ref().simulate_command(sim_filepath, temp_folder)
     }
 }

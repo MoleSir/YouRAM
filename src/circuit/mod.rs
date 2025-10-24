@@ -6,6 +6,8 @@ mod base;
 mod error;
 mod factory;
 
+use std::sync::{MappedRwLockReadGuard, RwLockReadGuard};
+
 pub use shared::*;
 pub use srdstring::ShrString;
 pub use module::*;
@@ -27,7 +29,7 @@ pub trait Design {
     }  
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ShrCircuit {
     Module(Shr<dyn Modular>),
     Primitive(Shr<dyn Primitive>),
@@ -72,6 +74,17 @@ impl ShrCircuit {
         }
     }
     
+    pub fn ports(&self) -> MappedRwLockReadGuard<'_, [Shr<Port>]> {
+        match self {
+            Self::Module(m) => RwLockReadGuard::map(m.read(), |m| m.ports()),
+            Self::Primitive(p) => RwLockReadGuard::map(p.read(), |p| p.ports()),
+        }
+    }
+
+    pub fn port_names(&self) -> Vec<ShrString> {
+        self.ports().iter().map(|p| p.read().name.clone()).collect()
+    }
+
     pub fn is_moudle(&self) -> bool {
         match self {
             Self::Module(_) => true,

@@ -5,8 +5,8 @@ use crate::{circuit::{CircuitFactory, DriveStrength, LogicGateKind}, format_shr,
     input:  ("A{size}", Input),
     enbale: ("en", Input),
     output: ("Z{size}", Output),
-    vdd:    ("vdd", Source),
-    gnd:    ("gnd", Source),
+    vdd:    ("vdd", Vdd),
+    gnd:    ("gnd", Gnd),
 )]
 pub struct AndArray {
     pub size: usize,

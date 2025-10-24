@@ -6,7 +6,8 @@ pub enum PortDirection {
     Input,
     Output,
     InOut,
-    Source,
+    Vdd, 
+    Gnd,
 }
 
 pub struct Port {
@@ -29,7 +30,15 @@ impl Port {
     }
 
     pub fn is_source(&self) -> bool {
-        self.direction == PortDirection::Source
+        self.direction == PortDirection::Vdd || self.direction == PortDirection::Gnd
+    }
+
+    pub fn is_vdd(&self) -> bool {
+        self.direction == PortDirection::Vdd
+    }
+
+    pub fn is_gnd(&self) -> bool {
+        self.direction == PortDirection::Gnd
     }
 
     pub fn connected(&self) -> bool {

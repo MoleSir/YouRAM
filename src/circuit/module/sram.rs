@@ -12,8 +12,8 @@ use super::{Core, CoreArg, CoreSelector, CoreSelectorArg, DecoderArg, InputDffs,
     data_input:    ("din{word_width}", Input),
     data_output:   ("dout{word_width}", Input),
 
-    vdd:           ("vdd", Source),
-    gnd:           ("gnd", Source),
+    vdd:           ("vdd", Vdd),
+    gnd:           ("gnd", Gnd),
 )]
 pub struct Sram {
     pub address_width: usize,
@@ -196,6 +196,18 @@ impl Sram {
 
     pub fn row_address_width(&self) -> usize {
         self.args.distribution.row_address_width
+    }
+
+    pub fn address_width(&self) -> usize {
+        self.args.address_width
+    }
+
+    pub fn word_width(&self) -> usize {
+        self.args.word_width
+    }
+
+    pub fn word_size(&self) -> usize {
+        2usize.pow(self.row_address_width() as u32)
     }
 }
 

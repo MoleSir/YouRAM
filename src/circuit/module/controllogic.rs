@@ -12,8 +12,8 @@ use crate::{circuit::{CircuitFactory, DriveStrength, LogicGateKind}, YouRAMResul
     sense_amp_enable:      ("sa_en", Output),
     write_deriver_enable:  ("we_en", Output),
     
-    voltage:               ("vdd", Source),
-    groud:                 ("gnd", Source),
+    voltage:               ("vdd", Vdd),
+    groud:                 ("gnd", Gnd),
 )]
 pub struct ControlLogic {
 }

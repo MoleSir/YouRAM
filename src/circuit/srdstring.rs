@@ -121,6 +121,12 @@ impl Borrow<str> for ShrString {
     }
 }
 
+impl AsRef<str> for ShrString {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

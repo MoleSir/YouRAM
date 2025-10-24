@@ -16,8 +16,8 @@ use super::{ColumnMuxArrayArg, SenseAmpArrayArg, WriteDriverArrayArg};
     data_input:          ("din{word_width}", Input),
     data_output:         ("dout{word_width}", Input),
     
-    vdd:                 ("vdd", Source),
-    gnd:                 ("gnd", Source),
+    vdd:                 ("vdd", Vdd),
+    gnd:                 ("gnd", Gnd),
 )]
 pub struct DataPath {
     pub word_width: usize,
@@ -137,7 +137,7 @@ impl DataPath {
         } else {
             for word_index in 0..self.args.word_width {
                 out_bl_nets.push(Self::bitline_pn(word_index));
-                out_bl_nets.push(Self::bitline_bar_pn(word_index));
+                out_br_nets.push(Self::bitline_bar_pn(word_index));
             }
         }   
         

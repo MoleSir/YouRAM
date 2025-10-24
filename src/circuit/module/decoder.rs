@@ -18,8 +18,8 @@ const SUB_DECODERS_INPUT_SIZES: [&'static [usize]; 8] = [
 #[module(
     address: ("A{input_size}", Input),
     output:  ("Y{output_size}", Output),
-    vdd:     ("vdd", Source),
-    gnd:     ("gnd", Source),
+    vdd:     ("vdd", Vdd),
+    gnd:     ("gnd", Gnd),
 )]
 pub struct Decoder {
     pub input_size: usize,

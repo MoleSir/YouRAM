@@ -1,34 +1,117 @@
 mod error;
-mod cell;
+mod cells;
+mod types;
+mod config;
+mod information;
+use cells::PdkCells;
 pub use error::*;
+use information::PdkInformation;
+use reda_unit::{Capacitance, Temperature, Time, Voltage};
+pub use types::*;
+pub use config::*;
 
-use std::{collections::HashMap, path::Path};
+use std::path::{Path, PathBuf};
 use reda_lib::model::LibLibrary;
 use reda_sp::Spice;
-use serde::{Deserialize, Serialize};
 use crate::{circuit::{Dff, DriveStrength, Leafcell, LogicGate, LogicGateKind, Shr}, ErrorContext, YouRAMError, YouRAMResult};
 
 pub struct Pdk {
-    pub config: PdkConfig,
-    pub logicgates: HashMap<(LogicGateKind, DriveStrength), Shr<LogicGate>>,
-    pub dffs: HashMap<DriveStrength, Shr<Dff>>,
-    pub bitcell: Shr<Leafcell>,
-    pub sense_amp: Shr<Leafcell>,
-    pub write_driver: Shr<Leafcell>,
-    pub column_trigate: Shr<Leafcell>,
-    pub precharge: Shr<Leafcell>,
+    config: PdkConfig,
+    infomation: PdkInformation,
+    cells: PdkCells,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PdkConfig {
-    pub stdcell_liberty: String,
-    pub stdcell_spice: String,
-    pub leafcell_spice: String,
-}
-
+// Interface for config
 impl Pdk {
+    pub fn nmos_model_path(&self, process: Process) -> Result<PathBuf, PdkError> {
+        self.config.nmos_model_path(process)
+            .ok_or_else(|| PdkError::NmosModelNotFound(process))
+    }
+
+    pub fn pmos_model_path(&self, process: Process) -> Result<PathBuf, PdkError> {
+        self.config.pmos_model_path(process)
+            .ok_or_else(|| PdkError::NmosModelNotFound(process))
+    }
+
+    #[inline]
+    pub fn pdk_root_path(&self) -> &Path {
+        &self.config.pdk_path
+    }
+
+    #[inline]
+    pub fn stdcell_liberty_path(&self) -> PathBuf {
+        self.config.stdcell_liberty_path()
+    }
+
+    #[inline]
+    pub fn stdcell_spice_path(&self) -> PathBuf {
+        self.config.stdcell_spice_path()
+    }
+
+    #[inline]
+    pub fn leafcell_spice_path(&self) -> PathBuf {
+        self.config.leafcell_spice_path()
+    }
+}
+
+// Interface for infomation
+impl Pdk {
+    #[inline]
+    pub fn name(&self) -> &str {
+        &self.infomation.name
+    }
+
+    #[inline]
+    pub fn pvt(&self) -> &Pvt {
+        &self.infomation.pvt
+    }
+
+    #[inline]
+    pub fn nom_process(&self) -> Option<f64> {
+        self.infomation.nom_process
+    }
+
+    #[inline]
+    pub fn nom_temperature(&self) -> Option<Temperature> {
+        self.infomation.nom_temperature
+    }
+
+    #[inline]
+    pub fn nom_voltage(&self) -> Option<Voltage> {
+        self.infomation.nom_voltage
+    }
+
+    #[inline]
+    pub fn default_inout_pin_cap(&self) -> Option<Capacitance> {
+        self.infomation.default_inout_pin_cap
+    }
+
+    #[inline]
+    pub fn default_input_pin_cap(&self) -> Option<Capacitance> {
+        self.infomation.default_input_pin_cap
+    }
+
+    #[inline]
+    pub fn default_output_pin_cap(&self) -> Option<Capacitance> {
+        self.infomation.default_output_pin_cap
+    }
+
+    #[inline]
+    pub fn default_fanout_load(&self) -> Option<Capacitance> {
+        self.infomation.default_fanout_load
+    }
+
+    #[inline]
+    pub fn default_max_transition(&self) -> Option<Time> {
+        self.infomation.default_max_transition
+    }
+}
+
+// Interface for cells
+impl Pdk {
+    #[inline]
     pub fn get_logicgate(&self, kind: LogicGateKind, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
-        self.logicgates.get(&(kind, drive_strength)).cloned()
+        self.cells.logicgates.get(&(kind, drive_strength)).cloned()
     }
 
     pub fn get_and(&self, input_size: usize, drive_strength: DriveStrength) -> Option<Shr<LogicGate>> {
@@ -56,81 +139,58 @@ impl Pdk {
         self.get_logicgate(kind, drive_strength)
     }
 
+    #[inline]
     pub fn get_dff(&self, drive_strength: DriveStrength) -> Option<Shr<Dff>> {
-        self.dffs.get(&drive_strength).cloned()
+        self.cells.dffs.get(&drive_strength).cloned()
     }
 
+    #[inline]
     pub fn get_bitcell(&self) -> Shr<Leafcell> {
-        self.bitcell.clone()
+        self.cells.bitcell.clone()
     }
 
+    #[inline]
     pub fn get_sense_amp(&self) -> Shr<Leafcell> {
-        self.sense_amp.clone()
+        self.cells.sense_amp.clone()
     }
 
+    #[inline]
     pub fn get_write_driver(&self) -> Shr<Leafcell> {
-        self.write_driver.clone()
+        self.cells.write_driver.clone()
     }
 
+    #[inline]
     pub fn get_column_trigate(&self) -> Shr<Leafcell> {
-        self.column_trigate.clone()
+        self.cells.column_trigate.clone()
     }
 
+    #[inline]
     pub fn get_precharge(&self) -> Shr<Leafcell> {
-        self.precharge.clone()
+        self.cells.precharge.clone()
     }
 }
 
 impl Pdk {
-    pub fn load<P: AsRef<Path>>(path: P) -> YouRAMResult<Self> {
+    pub fn load<P: AsRef<Path>>(pdk_path: P) -> YouRAMResult<Self> {
         // load config
-        let path: &Path = path.as_ref();
-        let config_path = path.join("config.json");
-        let config = std::fs::read_to_string(config_path).context("read pdk config")?;
-        let config: PdkConfig = serde_json::from_str(&config).context("parse pdk config")?;
+        let pdk_path: &Path = pdk_path.as_ref();
+        let config = PdkConfig::load(pdk_path)?;
 
         // load file
-        let logicgate_liberty_path = path.join(&config.stdcell_liberty);
-        let stdcell_spice_path = path.join(&config.stdcell_spice);
-        let leafcell_spice_path = path.join(&config.leafcell_spice);
-        let library = LibLibrary::load_file(logicgate_liberty_path).map_err(PdkError::Liberty)?;
-        let stdcell_spice = Spice::load_from(stdcell_spice_path).map_err(|e| YouRAMError::Message(e.to_string()))?;
-        let leafcell_spice = Spice::load_from(leafcell_spice_path).map_err(|e| YouRAMError::Message(e.to_string()))?;
+        let library = LibLibrary::load_file(config.stdcell_liberty_path()).map_err(PdkError::Liberty)?;
+        let stdcell_spice = Spice::load_from(config.stdcell_spice_path()).map_err(|e| YouRAMError::Message(e.to_string()))?;
+        let leafcell_spice = Spice::load_from(config.leafcell_spice_path()).map_err(|e| YouRAMError::Message(e.to_string()))?;
+
+        // extract infomation 
+        let infomation = PdkInformation::load(&library)?;
 
         // extract logicgates & dff
-        let mut logicgates = HashMap::new();
-        let mut dffs = HashMap::new();
-        for cell in library.cells.iter() {
-            if let Some(dff) = Self::extract_dff(cell, &stdcell_spice) {
-                let key = dff.drive_strength;
-                dffs.insert(key, Shr::new(dff));
-            } else if let Some(logicgate) = Self::extract_logicgate(cell, &stdcell_spice) {
-                let key = (logicgate.kind, logicgate.drive_strength);
-                logicgates.insert(key, Shr::new(logicgate));
-            }
-        }
+        let cells = PdkCells::load(&library, &stdcell_spice, &leafcell_spice).context("load cells")?;
 
-        // extract bitcell
-        let bitcell 
-            = Shr::new(Self::extract_bitcell(&leafcell_spice).context("extract bitcell")?.into());
-        let sense_amp
-            = Shr::new(Self::extract_sense_amp(&leafcell_spice).context("extract sens_amp")?.into());
-        let write_driver
-            = Shr::new(Self::extract_write_driver(&leafcell_spice).context("extract write_driver")?.into());
-        let column_trigate
-            = Shr::new(Self::extract_column_trigate(&leafcell_spice).context("extract column_trigate")?.into());    
-        let precharge
-            = Shr::new(Self::extract_precharge(&leafcell_spice).context("extract precharge")?.into());    
-    
         Ok(Self {
             config,
-            logicgates,
-            dffs,
-            bitcell,
-            sense_amp,
-            write_driver,
-            column_trigate,
-            precharge,
+            cells,
+            infomation,
         })
     }
 }
@@ -138,7 +198,7 @@ impl Pdk {
 #[cfg(test)]
 mod test {
     use reda_sp::ToSpice;
-    use crate::circuit::{DriveStrength, Primitive};
+    use crate::{circuit::{DriveStrength, Primitive}, pdk::Process};
 
     use super::Pdk;
 
@@ -152,5 +212,11 @@ mod test {
         let bitcell = pdk.get_bitcell();
         println!("{}", bitcell.read().netlist().to_spice());
 
+        println!("{:?}", pdk.config.models.get(&Process::TypeType).unwrap());
+
+        println!("{:?}", pdk.nmos_model_path(Process::TypeType).unwrap());
+        println!("{:?}", pdk.pdk_root_path());
+        println!("{}", pdk.name());
+        println!("{}", pdk.pvt())
     }
 }

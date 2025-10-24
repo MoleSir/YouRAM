@@ -48,7 +48,9 @@ fn write_spice_recursive<W: Write>(
                 
                 let mut pin_nets = Vec::new();
                 for pin in inst.pins.iter() {
-                    match &pin.read().net {
+                    let pin_ref = pin.read();
+                    match &pin_ref.net {
+                        // Some(net) => pin_nets.push(format!("{}={}", pin_ref.name, net.read().name)),
                         Some(net) => pin_nets.push(net.read().name.to_string()),
                         None => return Err(CircuitError::InstanceNotConnected(inst.name.to_string()))?,
                     }

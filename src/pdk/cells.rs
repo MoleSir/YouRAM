@@ -1,9 +1,59 @@
-use reda_lib::model::{LibCell, LibExpr, LibPinDirection};
+use std::collections::HashMap;
+use reda_lib::model::{LibCell, LibExpr, LibLibrary, LibPinDirection};
 use reda_sp::Spice;
-use crate::circuit::{Bitcell, ColumnTriGate, Dff, DriveStrength, LogicGate, LogicGateKind, Port, PortDirection, Precharge, SenseAmp, WriteDriver, BITCELL_NAME, COLUMN_TRI_GATE_NAME, PRECHARGE_NAME, SENSE_AMP_NAME, WRITE_DRIVER_NAME};
-use super::{Pdk, PdkError};
+use crate::{circuit::{Bitcell, ColumnTriGate, Dff, DriveStrength, Leafcell, LogicGate, LogicGateKind, Port, PortDirection, Precharge, SenseAmp, Shr, WriteDriver, BITCELL_NAME, COLUMN_TRI_GATE_NAME, PRECHARGE_NAME, SENSE_AMP_NAME, WRITE_DRIVER_NAME}, ErrorContext, YouRAMResult};
+use super::PdkError;
 
-impl Pdk {
+pub struct PdkCells {
+    pub logicgates: HashMap<(LogicGateKind, DriveStrength), Shr<LogicGate>>,
+    pub dffs: HashMap<DriveStrength, Shr<Dff>>,
+    pub bitcell: Shr<Leafcell>,
+    pub sense_amp: Shr<Leafcell>,
+    pub write_driver: Shr<Leafcell>,
+    pub column_trigate: Shr<Leafcell>,
+    pub precharge: Shr<Leafcell>,
+}
+
+impl PdkCells {
+    pub fn load(library: &LibLibrary, stdcell_spice: &Spice, leafcell_spice: &Spice) -> YouRAMResult<Self> {
+        // extract logicgates & dff
+        let mut logicgates = HashMap::new();
+        let mut dffs = HashMap::new();
+        for cell in library.cells.iter() {
+            if let Some(dff) = Self::extract_dff(cell, &stdcell_spice) {
+                let key = dff.drive_strength;
+                dffs.insert(key, Shr::new(dff));
+            } else if let Some(logicgate) = Self::extract_logicgate(cell, &stdcell_spice) {
+                let key = (logicgate.kind, logicgate.drive_strength);
+                logicgates.insert(key, Shr::new(logicgate));
+            }
+        }
+
+        // extract bitcell
+        let bitcell 
+            = Shr::new(Self::extract_bitcell(&leafcell_spice).context("extract bitcell")?.into());
+        let sense_amp
+            = Shr::new(Self::extract_sense_amp(&leafcell_spice).context("extract sens_amp")?.into());
+        let write_driver
+            = Shr::new(Self::extract_write_driver(&leafcell_spice).context("extract write_driver")?.into());
+        let column_trigate
+            = Shr::new(Self::extract_column_trigate(&leafcell_spice).context("extract column_trigate")?.into());    
+        let precharge
+            = Shr::new(Self::extract_precharge(&leafcell_spice).context("extract precharge")?.into()); 
+
+        Ok(Self {
+            logicgates,
+            dffs,
+            bitcell,
+            sense_amp,
+            write_driver,
+            column_trigate,
+            precharge,
+        })   
+    }
+}
+
+impl PdkCells {
     pub fn extract_bitcell(spice: &Spice) -> Result<Bitcell, PdkError> {
         let subckt = spice.subckts.iter()
             .find(|s| s.name == BITCELL_NAME)
@@ -17,8 +67,8 @@ impl Pdk {
         let bl = Port::new(subckt.ports[0].clone(), PortDirection::InOut);
         let br = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
         let wl = Port::new(subckt.ports[2].clone(), PortDirection::Input);
-        let vdd = Port::new(subckt.ports[3].clone(), PortDirection::Source);
-        let gnd = Port::new(subckt.ports[4].clone(), PortDirection::Source);
+        let vdd = Port::new(subckt.ports[3].clone(), PortDirection::Vdd);
+        let gnd = Port::new(subckt.ports[4].clone(), PortDirection::Gnd);
 
         Ok(Bitcell::new(bl, br, wl, vdd, gnd, subckt))
     }
@@ -37,8 +87,8 @@ impl Pdk {
         let br   = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
         let dout = Port::new(subckt.ports[2].clone(), PortDirection::Output);
         let en   = Port::new(subckt.ports[3].clone(), PortDirection::Input);
-        let vdd  = Port::new(subckt.ports[4].clone(), PortDirection::Source);
-        let gnd  = Port::new(subckt.ports[5].clone(), PortDirection::Source);
+        let vdd  = Port::new(subckt.ports[4].clone(), PortDirection::Vdd);
+        let gnd  = Port::new(subckt.ports[5].clone(), PortDirection::Gnd);
 
         Ok(SenseAmp::new(bl, br, dout, en, vdd, gnd, subckt))
     }
@@ -57,8 +107,8 @@ impl Pdk {
         let bl  = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
         let br  = Port::new(subckt.ports[2].clone(), PortDirection::InOut);
         let en  = Port::new(subckt.ports[3].clone(), PortDirection::Input);
-        let vdd = Port::new(subckt.ports[4].clone(), PortDirection::Source);
-        let gnd = Port::new(subckt.ports[5].clone(), PortDirection::Source);
+        let vdd = Port::new(subckt.ports[4].clone(), PortDirection::Vdd);
+        let gnd = Port::new(subckt.ports[5].clone(), PortDirection::Gnd);
 
         Ok(WriteDriver::new(din, bl, br, en, vdd, gnd, subckt))
     }
@@ -78,8 +128,8 @@ impl Pdk {
         let bl_o  = Port::new(subckt.ports[2].clone(), PortDirection::InOut);
         let br_o  = Port::new(subckt.ports[3].clone(), PortDirection::InOut);
         let sel   = Port::new(subckt.ports[4].clone(), PortDirection::Input);
-        let vdd   = Port::new(subckt.ports[5].clone(), PortDirection::Source);
-        let gnd   = Port::new(subckt.ports[6].clone(), PortDirection::Source);
+        let vdd   = Port::new(subckt.ports[5].clone(), PortDirection::Vdd);
+        let gnd   = Port::new(subckt.ports[6].clone(), PortDirection::Gnd);
 
         Ok(ColumnTriGate::new(bl, br, bl_o, br_o, sel, vdd, gnd, subckt))
     }
@@ -97,13 +147,13 @@ impl Pdk {
         let bl    = Port::new(subckt.ports[0].clone(), PortDirection::InOut);
         let br    = Port::new(subckt.ports[1].clone(), PortDirection::InOut);
         let enable   = Port::new(subckt.ports[2].clone(), PortDirection::Input);
-        let vdd   = Port::new(subckt.ports[3].clone(), PortDirection::Source);
+        let vdd   = Port::new(subckt.ports[3].clone(), PortDirection::Vdd);
 
         Ok(Precharge::new(bl, br, enable, vdd, subckt))   
     }
 }
 
-impl Pdk {
+impl PdkCells {
     pub fn extract_dff(cell: &LibCell, spice: &Spice) -> Option<Dff> {
         // ff exit?
         let ff = cell.ff.as_ref()?;
@@ -151,13 +201,20 @@ impl Pdk {
                         _ => panic!(),
                     };
                     ports.push(Port::new(port_name.clone(), direction));
-                } else if let Some(_) = cell.get_pg_pin(&port_name) {
-                    if vdd_port_index.is_none() {
-                        vdd_port_index = Some(port_index);
-                    } else {
-                        gnd_port_index = Some(port_index);
-                    }
-                    ports.push(Port::new(port_name.clone(), PortDirection::Source));
+                } else if let Some(pg_pin) = cell.get_pg_pin(&port_name) {
+                    let name = pg_pin.voltage_name.to_lowercase();
+                    match name.as_str() {
+                        "vdd" => {
+                            vdd_port_index = Some(port_index);
+                            ports.push(Port::new(port_name.clone(), PortDirection::Vdd));
+                        }
+                        "gnd" | "vss" => {
+                            gnd_port_index = Some(port_index);
+                            ports.push(Port::new(port_name.clone(), PortDirection::Gnd));
+                        }
+                        // _ => return Err(PdkError::UnkownPgPinName(name))?,
+                        _ => return None,
+                    };
                 }
             }
 
@@ -178,7 +235,7 @@ impl Pdk {
         }
     }
 
-    // TODO: better way to extract logicgate!
+    // TODO: better way to extract logicgate!(add result)
     pub fn extract_logicgate(cell: &LibCell, spice: &Spice) -> Option<LogicGate> {
         // 1. 根据输出 pin function 判断类型
         if cell.output_pins().count() != 1 {
@@ -214,15 +271,21 @@ impl Pdk {
                     _ => panic!(),
                 };
                 ports.push(Port::new(port_name.clone(), direction));
-            } else if let Some(_) = cell.get_pg_pin(&port_name) {
-                // TODO, how to recg vdd or gnd?
-                if vdd_port_index.is_none() {
-                    vdd_port_index = Some(port_index);
-                } else {
-                    gnd_port_index = Some(port_index);
-                }
-                ports.push(Port::new(port_name.clone(), PortDirection::Source));
-                
+            } else if let Some(pg_pin) = cell.get_pg_pin(&port_name) {
+                // TODO: use voltage_name to regc vdd/gnd
+                let name = pg_pin.voltage_name.to_lowercase();
+                match name.as_str() {
+                    "vdd" => {
+                        vdd_port_index = Some(port_index);
+                        ports.push(Port::new(port_name.clone(), PortDirection::Vdd));
+                    }
+                    "gnd" | "vss" => {
+                        gnd_port_index = Some(port_index);
+                        ports.push(Port::new(port_name.clone(), PortDirection::Gnd));
+                    }
+                    // _ => return Err(PdkError::UnkownPgPinName(name))?,
+                    _ => return None,
+                };
             }
         }
 
@@ -309,7 +372,7 @@ mod tests {
 
     fn str_to_kind(s: &str) -> Option<LogicGateKind> {
         let expr = LibExpr::from_str(s).unwrap();
-        Pdk::try_transform_expr(&expr)
+        PdkCells::try_transform_expr(&expr)
     }
 
     #[test]

@@ -6,8 +6,8 @@ use super::BufferArg;
 #[module(
     wordline_input:  ("wl_in", Input),
     wordline:        ("wl", Output),
-    vdd:             ("vdd", Source),
-    gnd:             ("gnd", Source),
+    vdd:             ("vdd", Vdd),
+    gnd:             ("gnd", Gnd),
 )]
 pub struct WordlineDriver {
     pub fanout: usize,

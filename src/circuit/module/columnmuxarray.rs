@@ -13,8 +13,8 @@ use super::ColumnMuxArg;
     bitline_selected:     ("bl{mux_size}", InOut),
     bitline_bar_selected: ("br{mux_size}", InOut),
  
-    vdd:                  ("vdd", Source),
-    gnd:                  ("gnd", Source),
+    vdd:                  ("vdd", Vdd),
+    gnd:                  ("gnd", Gnd),
 )]
 pub struct ColumnMuxArray {
     pub select_size: usize,
