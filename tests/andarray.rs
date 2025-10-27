@@ -3,10 +3,7 @@ use rand::Rng;
 use reda_unit::t;
 use tracing::{info, Level};
 use youram::{
-    circuit::{AndArray, AndArrayArg, CircuitFactory}, 
-    pdk::{Enviroment, Pdk}, 
-    simulate::{CircuitSimulator, NgSpice, VoltageAtMeas}, 
-    ErrorContext
+    circuit::{AndArray, AndArrayArg, CircuitFactory}, export, pdk::{Enviroment, Pdk}, simulate::{CircuitSimulator, NgSpice, VoltageAtMeas}, ErrorContext
 };
 use approx::assert_abs_diff_eq;
 
@@ -16,7 +13,7 @@ const AND_SIZE: usize = 8;
 
 fn main_result() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
         .with_target(false)
         .with_file(false)
         .with_line_number(false)
@@ -27,6 +24,8 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
     let andarray = factory.module(AndArrayArg::new(AND_SIZE))?;
     let pvt = pdk.pvt();
     let env = Enviroment::new(pvt.clone(), t!(0.5 n), 0.0.into());
+
+    export::write_spice(andarray.clone(), format!("{TEMP}/andarray.sp"))?;
 
     // test en = 1
     {
@@ -54,7 +53,7 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         simulator.write_trans(t!(0.5 n), t!(0.0), t!(15. n))?;
-        let result = simulator.simulate(NgSpice, TEMP)?;
+        let result = simulator.simulate(&NgSpice, TEMP)?;
 
         for (index, expect_value) in inputs.into_iter().enumerate() {
             let expect_value = if expect_value { pvt.voltage.to_f64() } else { 0.0 }; 
@@ -91,7 +90,7 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         simulator.write_trans(t!(0.5 n), t!(0.0), t!(15. n))?;
-        let result = simulator.simulate(NgSpice, TEMP)?;
+        let result = simulator.simulate(&NgSpice, TEMP)?;
 
         for (name, got_value) in result {
             info!("{name}: got {got_value}");
@@ -106,5 +105,6 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
 fn main() {
     if let Err(e) = main_result() {
         eprint!("Err: {}\n", e);
+        panic!("");
     }
 }

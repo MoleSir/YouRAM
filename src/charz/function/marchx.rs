@@ -1,10 +1,10 @@
 use crate::YouRAMResult;
-use super::{FunctionCharz, FunctionTestPolicy};
+use super::{FunctionCharzPolicy, FunctionTransactionGenerator};
 
 pub struct MarchXPolicy;
 
-impl FunctionTestPolicy for MarchXPolicy {
-    fn generate_transactions(&self, charz: &mut FunctionCharz) -> YouRAMResult<()> {
+impl FunctionCharzPolicy for MarchXPolicy {
+    fn generate_transactions(&self, charz: &mut FunctionTransactionGenerator) -> YouRAMResult<()> {
         let max_address = charz.transactions.max_address();
         let full_word = charz.transactions.max_word();
     

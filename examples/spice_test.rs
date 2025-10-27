@@ -40,7 +40,7 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
     simulator.write_trans(t!(0.5 n), t!(0.0), t!(15. n))?;
 
 
-    let result = simulator.simulate(NgSpice, "./temp")?;
+    let result = simulator.simulate(&NgSpice, "./temp")?;
 
     for (name, value) in result {
         println!("{name}: {value}");

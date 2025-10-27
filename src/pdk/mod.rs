@@ -105,6 +105,56 @@ impl Pdk {
     pub fn default_max_transition(&self) -> Option<Time> {
         self.infomation.default_max_transition
     }
+
+    #[inline]
+    pub fn slew_lower_threshold_pct_fall(&self) -> f64 {
+        self.infomation.slew_lower_threshold_pct_fall
+    }
+
+    #[inline]
+    pub fn slew_lower_threshold_pct_rise(&self) -> f64 {
+        self.infomation.slew_lower_threshold_pct_rise
+    }
+
+    #[inline]
+    pub fn slew_upper_threshold_pct_rise(&self) -> f64 {
+        self.infomation.slew_upper_threshold_pct_rise
+    }
+
+    #[inline]
+    pub fn slew_upper_threshold_pct_fall(&self) -> f64 {
+        self.infomation.slew_upper_threshold_pct_fall
+    }
+
+    #[inline]
+    pub fn input_threshold_pct_fall(&self) -> f64 {
+        self.infomation.input_threshold_pct_fall
+    }
+
+    #[inline]
+    pub fn input_threshold_pct_rise(&self) -> f64 {
+        self.infomation.input_threshold_pct_rise
+    }
+
+    #[inline]
+    pub fn output_threshold_pct_fall(&self) -> f64 {
+        self.infomation.output_threshold_pct_fall
+    }
+
+    #[inline]
+    pub fn output_threshold_pct_rise(&self) -> f64 {
+        self.infomation.output_threshold_pct_rise
+    }
+
+    #[inline]
+    pub fn timing_input_net_transitions(&self) -> &[Time] {
+        &self.infomation.timing_input_net_transitions
+    }
+
+    #[inline]
+    pub fn timing_output_net_capacitances(&self) -> &[Capacitance] {
+        &self.infomation.timing_output_net_capacitances
+    }
 }
 
 // Interface for cells
@@ -181,11 +231,11 @@ impl Pdk {
         let stdcell_spice = Spice::load_from(config.stdcell_spice_path()).map_err(|e| YouRAMError::Message(e.to_string()))?;
         let leafcell_spice = Spice::load_from(config.leafcell_spice_path()).map_err(|e| YouRAMError::Message(e.to_string()))?;
 
-        // extract infomation 
-        let infomation = PdkInformation::load(&library)?;
-
         // extract logicgates & dff
         let cells = PdkCells::load(&library, &stdcell_spice, &leafcell_spice).context("load cells")?;
+
+        // extract infomation 
+        let infomation = PdkInformation::load(&library, &cells)?;
 
         Ok(Self {
             config,
@@ -217,6 +267,11 @@ mod test {
         println!("{:?}", pdk.nmos_model_path(Process::TypeType).unwrap());
         println!("{:?}", pdk.pdk_root_path());
         println!("{}", pdk.name());
-        println!("{}", pdk.pvt())
+        println!("{}", pdk.pvt());
+
+        // println!("{:?}", pdk.get_dff(DriveStrength::X1).unwrap().read().setup_rising_timing);
+
+        println!("{:?}", pdk.timing_input_net_transitions());
+        println!("{:?}", pdk.timing_output_net_capacitances());
     }
 }

@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 use crate::YouRAMResult;
-use super::{FunctionCharz, FunctionTestPolicy};
+use super::{FunctionCharzPolicy, FunctionTransactionGenerator};
 use rand::Rng;
 use tracing::debug;
 
 pub struct RandomPolicy;
 
-impl FunctionTestPolicy for RandomPolicy {
+impl FunctionCharzPolicy for RandomPolicy {
     /*
 
         1. 生成 N 个地址
@@ -18,7 +18,7 @@ impl FunctionTestPolicy for RandomPolicy {
         在产生至少 2*N 个读操作后结束。
 
     */
-    fn generate_transactions(&self, charz: &mut FunctionCharz) -> YouRAMResult<()> {
+    fn generate_transactions(&self, charz: &mut FunctionTransactionGenerator) -> YouRAMResult<()> {
         debug!("generate transactions with random policy");
         let read_transaction_size = 1.max(( 0.1 * charz.transactions.sram.read().word_size() as f64 ) as usize);
         let addresses = self.generate_random_address(charz, read_transaction_size)?;
@@ -51,7 +51,7 @@ impl FunctionTestPolicy for RandomPolicy {
 }
 
 impl RandomPolicy {
-    fn generate_random_address(&self, charz: &mut FunctionCharz, read_transaction_size: usize) -> YouRAMResult<Vec<usize>> {
+    fn generate_random_address(&self, charz: &mut FunctionTransactionGenerator, read_transaction_size: usize) -> YouRAMResult<Vec<usize>> {
         let mut address_set = HashSet::new();
         while address_set.len() < read_transaction_size {
             let address = charz.transactions.random_address();

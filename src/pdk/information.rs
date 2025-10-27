@@ -1,7 +1,7 @@
-use reda_lib::model::{LibLibrary, LibOperatingConditions};
+use reda_lib::model::{LibLibrary, LibOperatingConditions, LibPinDirection};
 use reda_unit::{Capacitance, Temperature, Time, Voltage};
-use crate::{ErrorContext, YouRAMResult};
-use super::{PdkError, Process, Pvt};
+use crate::{circuit::{DriveStrength, LogicGateKind}, ErrorContext, YouRAMResult};
+use super::{cells::PdkCells, PdkError, Process, Pvt};
 
 #[derive(Debug, Clone)]
 pub struct PdkInformation {
@@ -18,10 +18,23 @@ pub struct PdkInformation {
     pub default_output_pin_cap: Option<Capacitance>,
     pub default_fanout_load: Option<Capacitance>,
     pub default_max_transition: Option<Time>,
+
+    pub slew_lower_threshold_pct_fall: f64,
+    pub slew_lower_threshold_pct_rise: f64,
+    pub slew_upper_threshold_pct_fall: f64,
+    pub slew_upper_threshold_pct_rise: f64,
+
+    pub input_threshold_pct_fall: f64,
+    pub input_threshold_pct_rise: f64,
+    pub output_threshold_pct_fall: f64,
+    pub output_threshold_pct_rise: f64,
+
+    pub timing_input_net_transitions: Vec<Time>,
+    pub timing_output_net_capacitances: Vec<Capacitance>,
 }
 
 impl PdkInformation {
-    pub fn load(library: &LibLibrary) -> YouRAMResult<Self> {
+    pub fn load(library: &LibLibrary, cells: &PdkCells) -> YouRAMResult<Self> {
         let time_unit = library.time_unit;
         let capacitance_unit = library.capacitive_load_unit.unwrap_or_default();
 
@@ -42,6 +55,8 @@ impl PdkInformation {
 
         let pvt = Self::extract_pvt(library).context("extract pvt")?;
 
+        let (timing_input_net_transitions, timing_output_net_capacitances) = Self::extract_timings(library, cells)?;
+
         Ok(Self {
             name: library.name.clone(),
             pvt,
@@ -53,8 +68,45 @@ impl PdkInformation {
             default_output_pin_cap,
             default_fanout_load,
             default_max_transition,
+            slew_lower_threshold_pct_fall: library.slew_lower_threshold_pct_fall / 100.0,
+            slew_lower_threshold_pct_rise: library.slew_lower_threshold_pct_rise / 100.0,
+            slew_upper_threshold_pct_fall: library.slew_upper_threshold_pct_fall / 100.0,
+            slew_upper_threshold_pct_rise: library.slew_upper_threshold_pct_rise / 100.0,
+            input_threshold_pct_fall: library.input_threshold_pct_fall / 100.0,
+            input_threshold_pct_rise: library.input_threshold_pct_rise / 100.0,
+            output_threshold_pct_fall: library.output_threshold_pct_fall / 100.0,
+            output_threshold_pct_rise: library.output_threshold_pct_rise / 100.0,
+            timing_input_net_transitions,
+            timing_output_net_capacitances
         })
         
+    }
+
+    fn extract_timings(library: &LibLibrary, cells: &PdkCells) -> YouRAMResult<(Vec<Time>, Vec<Capacitance>)> {
+        let time_unit = library.time_unit;
+        let capacitance_unit = library.capacitive_load_unit.unwrap_or_default();
+        
+        // MARK: use inv1 cell's timing info
+        let inv_x1_name = cells.logicgates.get(&(LogicGateKind::Inv, DriveStrength::X1)).unwrap().read().name.to_string();
+        let cell = library.cell(&inv_x1_name).unwrap();
+        for pin in cell.pins.iter() {
+            if let LibPinDirection::Output = pin.direction {
+                let timing = &pin.timings[0];
+                let cell_fall = timing.cell_fall.as_ref().unwrap();
+                let input_net_transitions = cell_fall.index_1.as_ref().unwrap();
+                let total_output_net_capacitances = cell_fall.index_2.as_ref().unwrap();
+                
+                let timing_input_net_transitions = input_net_transitions.iter()
+                    .map(|v| Time::from(time_unit.value() * v))
+                    .collect();
+                let timing_output_net_capacitances = total_output_net_capacitances.iter()
+                    .map(|v| Capacitance::from(capacitance_unit.value() * v))
+                    .collect();
+
+                return Ok((timing_input_net_transitions, timing_output_net_capacitances));
+            }
+        }
+        unreachable!()
     }
 
     fn extract_pvt(library: &LibLibrary) -> YouRAMResult<Pvt> {

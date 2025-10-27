@@ -31,7 +31,7 @@ impl Meas for DelayMeas {
 
     fn write_command(&self, out: &mut dyn std::io::Write) -> std::io::Result<()> {
         let command = format!(
-            ".meas tran {} TRIG v({}) VAL={} {}=1 TD={} TARG v({}) VAL={} {}=1 TD={}",
+            ".meas tran {} TRIG v({}) VAL={} {}=1 TD={} TARG v({}) VAL={} {}=1 TD={}\n",
             
             self.name,
 

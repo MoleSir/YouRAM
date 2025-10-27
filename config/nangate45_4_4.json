@@ -5,9 +5,10 @@
     "address_width" : 4,
     "word_width" : 4,
 
-    "function_test": {
-        "period": "10ns",
-        "policy": "random",
-        "command": "ngspice"
-    }
+    "spice_command": "ngspice",
+    "period": "10ns",
+    "function_test_policy": "random",
+    
+    "export_verilog": true,
+    "export_liberty": true
 }

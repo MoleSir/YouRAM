@@ -2,7 +2,7 @@ use std::sync::Arc;
 use reda_unit::t;
 use tracing::Level;
 use youram::{
-    charz::function::{FunctionTestBuilder, RandomPolicy}, 
+    charz::{FunctionCharz, RandomPolicy}, 
     circuit::{CircuitFactory, SramArg}, 
     pdk::{Enviroment, Pdk}, 
     simulate::NgSpice, ErrorContext
@@ -10,12 +10,12 @@ use youram::{
 
 const PDK: &str = "./platforms/nangate45";
 const TEMP: &str = "./temp";
-const ADDRESS_WIDTH: usize = 4;
+const ADDRESS_WIDTH: usize = 2;
 const WORD_WIDTH: usize = 4;
 
 fn main_result() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
         .with_target(false)
         .with_file(false)
         .with_line_number(false)
@@ -27,7 +27,7 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
     let pvt = pdk.pvt();
     let env = Enviroment::new(pvt.clone(), t!(0.5 n), 0.0.into());
 
-    let config = FunctionTestBuilder::default()
+    let pass = FunctionCharz::config()
         .sram(sram.clone())
         .period(t!(10. n))
         .env(env)
@@ -35,11 +35,9 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
         .policy(RandomPolicy)
         .command(NgSpice)
         .temp_folder(TEMP)
-        .build()?;
+        .test()?;
 
-    let res = config.test()?;
-
-    assert!(res);
+    assert!(pass);
 
     Ok(())
 }
@@ -48,5 +46,6 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
 fn main() {
     if let Err(e) = main_result() {
         eprint!("Err: {}\n", e);
+        panic!("");
     }
 }

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
 use reda_unit::{Capacitance, Temperature, Time, Voltage};
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,7 @@ impl Display for Pvt {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct SlewLoad {
     pub slew: Time,
     pub load: Capacitance,
@@ -59,6 +59,13 @@ impl SlewLoad {
             slew: slew.into(),
             load: load.into(),
         }
+    }
+}
+
+impl Hash for SlewLoad {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.slew.value().to_f64().to_bits());
+        state.write_u64(self.load.value().to_f64().to_bits());
     }
 }
 

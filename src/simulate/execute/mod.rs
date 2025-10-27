@@ -16,7 +16,7 @@ pub struct SpiceExector {
 }
 
 impl SpiceExector {
-    pub fn simulate(&mut self, execute: impl ExecuteCommand, temp_folder: &Path) -> YouRAMResult<HashMap<String, Number>> {
+    pub fn simulate(&mut self, execute: &impl SpiceCommand, temp_folder: &Path) -> YouRAMResult<HashMap<String, Number>> {
         let result_path = execute.execute(&self.simulate_path, temp_folder).context("Execute simualte")?;
         self.get_meas_results(&result_path).context("Get meas result")
     }   
@@ -34,7 +34,7 @@ impl SpiceExector {
     }
 }
 
-pub trait ExecuteCommand {
+pub trait SpiceCommand {
     /// Return the simulate command to execute 
     fn simulate_command(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<String>;
 
@@ -70,7 +70,7 @@ pub trait ExecuteCommand {
     }
 }
 
-impl ExecuteCommand for Box<dyn ExecuteCommand> {
+impl SpiceCommand for Box<dyn SpiceCommand> {
     fn simulate_command(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<String> {
         self.as_ref().simulate_command(sim_filepath, temp_folder)
     }

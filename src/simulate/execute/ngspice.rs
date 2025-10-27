@@ -1,11 +1,11 @@
 use std::path::Path;
 use crate::YouRAMResult;
-use super::ExecuteCommand;
+use super::SpiceCommand;
 
 #[derive(Clone)]
 pub struct NgSpice;
 
-impl ExecuteCommand for NgSpice {
+impl SpiceCommand for NgSpice {
     fn simulate_command(&self, sim_filepath: &Path, temp_folder: &Path) -> YouRAMResult<String> {
         let sim_filepath = sim_filepath.as_ref();
         let temp_folder = temp_folder.as_ref();

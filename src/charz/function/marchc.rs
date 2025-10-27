@@ -1,11 +1,11 @@
 use crate::YouRAMResult;
-use super::{FunctionCharz, FunctionTestPolicy};
+use super::{FunctionCharzPolicy, FunctionTransactionGenerator};
 
 /// March_algorithm: https://en.wikipedia.org/wiki/March_algorithm
 pub struct MarchCPolicy;
 
-impl FunctionTestPolicy for MarchCPolicy {
-    fn generate_transactions(&self, charz: &mut FunctionCharz) -> YouRAMResult<()> {
+impl FunctionCharzPolicy for MarchCPolicy {
+    fn generate_transactions(&self, charz: &mut FunctionTransactionGenerator) -> YouRAMResult<()> {
         let max_address = charz.transactions.max_address();
         let full_word = charz.transactions.max_word();
     

@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use reda_lib::model::LibCell;
+use reda_lib::model::{LibCell, LibTiming};
 use reda_sp::Subckt;
 use crate::circuit::{CircuitError, Design, Port, Shr, ShrString};
 use super::Primitive;
@@ -66,6 +66,9 @@ pub struct Dff {
     pub gnd_port_index: usize,
 
     pub netlist: Subckt,
+
+    pub hold_rising_timing: LibTiming,
+    pub setup_rising_timing: LibTiming,
 }
 
 impl LogicGateArg {
@@ -104,17 +107,16 @@ impl LogicGate {
             .unwrap()
     }
 
-    // TODO
     pub fn vdd_pn(&self) -> ShrString {
-        self.source_ports()
-            .nth(0)
+        self.ports.iter()
+            .find(|port| port.read().is_vdd())
             .map(|port| port.read().name.clone())
             .unwrap()
     }
 
     pub fn gnd_pn(&self) -> ShrString {
-        self.source_ports()
-            .nth(1)
+        self.ports.iter()
+            .find(|port| port.read().is_gnd())
             .map(|port| port.read().name.clone())
             .unwrap()
     }

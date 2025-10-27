@@ -2,10 +2,7 @@ use std::sync::Arc;
 use reda_unit::t;
 use tracing::{info, Level};
 use youram::{
-    circuit::{CircuitFactory, Decoder, DecoderArg}, 
-    pdk::{Enviroment, Pdk}, 
-    simulate::{CircuitSimulator, NgSpice, VoltageAtMeas}, 
-    ErrorContext
+    circuit::{CircuitFactory, Decoder, DecoderArg}, export, pdk::{Enviroment, Pdk}, simulate::{CircuitSimulator, NgSpice, VoltageAtMeas}, ErrorContext
 };
 use approx::assert_abs_diff_eq;
 
@@ -27,6 +24,8 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
     let decoder = factory.module(DecoderArg::new(INPUT_SIZE))?;
     let pvt = pdk.pvt();
     let env = Enviroment::new(pvt.clone(), t!(0.5 n), 0.0.into());
+
+    export::write_spice(decoder.clone(), format!("{TEMP}/andarray.sp"))?;
 
     for t in 0..OUTPUT_SIZE {
         info!("test input {t}");
@@ -53,7 +52,7 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
         }
         simulator.write_trans(t!(0.5 n), t!(0.0), t!(15. n))?;
 
-        let result = simulator.simulate(NgSpice, TEMP)?;
+        let result = simulator.simulate(&NgSpice, TEMP)?;
         
         for (name, value) in result {
             info!("{name}: {value}");
@@ -72,5 +71,6 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
 fn main() {
     if let Err(e) = main_result() {
         eprint!("Err: {}\n", e);
+        panic!("");
     }
 }

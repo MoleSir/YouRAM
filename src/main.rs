@@ -1,14 +1,14 @@
-use std::{path::PathBuf, sync::Arc};
-use reda_unit::Time;
+use std::{path::{Path, PathBuf}, sync::Arc};
+use reda_unit::{t, Time};
 use serde::{Deserialize, Serialize};
 use tracing::{info, Level};
 use clap::Parser;
 use youram::{
-    charz::function::{FunctionTestBuilder, FunctionTestPolicy, RandomPolicy}, 
+    charz::{FunctionCharz, FunctionCharzPolicy, RandomPolicy}, 
     circuit::{CircuitFactory, SramArg}, 
     export, 
     pdk::{Enviroment, Pdk}, 
-    simulate::{ExecuteCommand, NgSpice}, 
+    simulate::{SpiceCommand, NgSpice}, 
     ErrorContext
 };
 
@@ -37,9 +37,9 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
 
     // test sram
     if let Some(function_test) = &config.function_test {
-        let policy = function_test.policy()?;
-        let command = function_test.command()?;
-        let period = function_test.period;
+        let policy = parse_function_test_policy(&function_test)?;
+        let period = config.period;
+        let command = config.spice_command()?;
 
         // load simulate config in pdk
         let pvt = pdk.pvt();
@@ -48,23 +48,41 @@ fn main_result() -> Result<(), Box<dyn std::error::Error>> {
         let env = Enviroment::new(pvt.clone(), input_slew, output_load);
 
         // run functional test
-        let config = FunctionTestBuilder::default()
+        FunctionCharz::config()
             .sram(sram.clone())
             .period(period)
             .env(env)
-            .pdk(pdk)
+            .pdk(pdk.clone())
             .policy_box(policy)
             .command_box(command)
             .temp_folder(config.temp_folder_path())
-            .build()?;
-
-        config.test()?;
+            .test()?;
     }
 
-    // write spice
-    let outptu_file = config.output_path.join(format!("{}.sp", sram.read().name));
-    export::write_spice(sram, outptu_file)?;
+    // write
+    if config.export_spice {
+        let spice_file = config.join_output(format!("{}.sp", sram.read().name));
+        export::write_spice(sram.clone(), spice_file)?;
+    }
     
+    if config.export_verilog {
+        let verilog_file = config.join_output(format!("{}.v", sram.read().name));
+        export::write_verilog(sram.clone(), verilog_file)?;
+    }
+
+    if config.export_liberty {
+        let liberty_file = config.join_output(format!("{}.lib", sram.read().name));
+        let command = config.spice_command()?;
+        export::write_liberty(
+            sram.clone(), 
+            liberty_file, 
+            config.period, 
+            pdk.clone(), 
+            command, 
+            config.temp_folder_path()
+        )?;
+    }
+
     Ok(())
 }
 
@@ -98,31 +116,32 @@ impl Args {
 pub struct Config {
     pub pdk_path: PathBuf,
     pub output_path: PathBuf,
+
     pub address_width: usize,
     pub word_width: usize,
-    pub function_test: Option<FunctionTestConfig>,
+    
+    #[serde(default = "default_spice_command")]
+    pub spice_command: String,
+
+    #[serde(default = "default_period")]
+    pub period: Time,
+    
+    pub function_test: Option<String>,
+
+    #[serde(default = "const_true")]
+    pub export_spice: bool,
+
+    #[serde(default = "const_true")]
+    pub export_verilog: bool,
+
+    #[serde(default = "const_false")]
+    pub export_liberty: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct FunctionTestConfig {
-    period: Time,
-    policy: String,
-    command: String,
-}
-
-impl FunctionTestConfig {
-    pub fn policy(&self) -> Result<Box<dyn FunctionTestPolicy>, Box<dyn std::error::Error>> {
-        match self.policy.as_str() {
-            "random" => Ok(Box::new(RandomPolicy)),
-            _ => Err(format!("Un support function test policy: {}", self.policy.as_str()))?,
-        }
-    }
-
-    pub fn command(&self) -> Result<Box<dyn ExecuteCommand>, Box<dyn std::error::Error>> {
-        match self.command.as_str() {
-            "ngspice" => Ok(Box::new(NgSpice)),
-            _ => Err(format!("Un support spice executor: {}", self.command.as_str()))?,
-        }
+fn parse_function_test_policy(policy: &str) -> Result<Box<dyn FunctionCharzPolicy>, Box<dyn std::error::Error>> {
+    match policy {
+        "random" => Ok(Box::new(RandomPolicy)),
+        _ => Err(format!("Un support function test policy: {}", policy))?,
     }
 }
 
@@ -147,4 +166,31 @@ impl Config {
     pub fn temp_folder_path(&self) -> PathBuf {
         self.output_path.join("temp")
     }
+
+    pub fn join_output(&self, path: impl AsRef<Path>) -> PathBuf {
+        self.output_path.join(path.as_ref())
+    }
+
+    pub fn spice_command(&self) -> Result<Box<dyn SpiceCommand>, Box<dyn std::error::Error>> {
+        match self.spice_command.as_str() {
+            "ngspice" => Ok(Box::new(NgSpice)),
+            _ => Err(format!("Un support spice executor: {}", self.spice_command.as_str()))?,
+        }
+    }
+}
+
+fn default_spice_command() -> String {
+    "ngspice".to_string()
+}
+
+fn default_period() -> Time {
+    t!(10 n)
+}
+
+const fn const_true() -> bool {
+    true
+}
+
+const fn const_false() -> bool {
+    false
 }

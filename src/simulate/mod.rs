@@ -10,7 +10,7 @@ pub use execute::*;
 use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
 use reda_unit::{t, v, Number, Time, Voltage};
 use itertools::Itertools;
-use crate::{circuit::{PortDirection, ShrCircuit}, export, pdk::{Enviroment, Pdk}, ErrorContext, YouRAMResult};
+use crate::{circuit::{PortDirection, ShrCircuit}, pdk::{Enviroment, Pdk}, YouRAMResult};
 
 pub struct CircuitSimulator {
     pub writor: SpiceWritor,
@@ -31,6 +31,8 @@ impl CircuitSimulator {
     /// - temperature
     /// - instance of this circuit(all net has the same name with circuit's port)
     /// 
+    /// Plase ensure `circuit` has been written in `circuit_path` 
+    /// 
     /// after `create`, you may need to write:
     /// - input stimulate 
     /// - meas
@@ -45,20 +47,17 @@ impl CircuitSimulator {
         circuit_path: P2, 
     ) -> YouRAMResult<Self> 
     where 
-        P1: AsRef<Path>,
-        P2: AsRef<Path>,
+        P1: Into<PathBuf>,
+        P2: Into<PathBuf>,
         C: Into<ShrCircuit>,
     {        
         let writor = SpiceWritor::open(simulate_path)?;
-        let mut simulator = Self { writor, circuit: circuit.into(), env, pdk, circuit_path: circuit_path.as_ref().into() };
+        let mut simulator = Self { writor, circuit: circuit.into(), env, pdk, circuit_path: circuit_path.into() };
         simulator.init()?;
         Ok(simulator)
     }
 
     fn init(&mut self) -> YouRAMResult<()> {
-        // write circuit to a spice file
-        export::write_spice(self.circuit.clone(), &self.circuit_path)
-            .with_context(|| format!("write circuit '{}' to '{:?}'", self.circuit.name(), self.circuit_path))?;
         let nmos_model_path = self.pdk.nmos_model_path(self.env.process())?;
         let pmos_model_path = self.pdk.pmos_model_path(self.env.process())?;
 
@@ -93,7 +92,7 @@ impl CircuitSimulator {
         Ok(())
     }
 
-    pub fn simulate(self, execute: impl ExecuteCommand, temp_folder: impl AsRef<Path>) -> YouRAMResult<HashMap<String, Number>> {
+    pub fn simulate(self, execute: &impl SpiceCommand, temp_folder: impl AsRef<Path>) -> YouRAMResult<HashMap<String, Number>> {
         let mut executor = self.writor.close()?;
         executor.simulate(execute, temp_folder.as_ref())
     }

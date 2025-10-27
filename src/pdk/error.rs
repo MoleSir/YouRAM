@@ -22,6 +22,18 @@ pub enum PdkError {
     #[error("unkonw pg pin name {0}")]
     UnkownPgPinName(String),
 
+    #[error("cell {0} not found in spice file not exit in lib file")]
+    CellNotFoundInSpiceFile(String),
+
+    #[error("can't get driver strenght in cell {0}")]
+    CanNotGetDriverStrenghtInCell(String),
+
+    #[error("lack port {0}")]
+    LackPort(&'static str),
+
+    #[error("expect attr {0} but no exit")]
+    ExpectAttrButNotFound(&'static str),
+
     #[error(transparent)]
     Liberty(#[from] LibError),
 }

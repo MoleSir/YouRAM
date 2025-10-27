@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use reda_lib::model::{LibCell, LibExpr, LibLibrary, LibPinDirection};
+use reda_lib::model::{LibCell, LibExpr, LibLibrary, LibPgType, LibPinDirection, LibTimingType};
 use reda_sp::Spice;
 use crate::{circuit::{Bitcell, ColumnTriGate, Dff, DriveStrength, Leafcell, LogicGate, LogicGateKind, Port, PortDirection, Precharge, SenseAmp, Shr, WriteDriver, BITCELL_NAME, COLUMN_TRI_GATE_NAME, PRECHARGE_NAME, SENSE_AMP_NAME, WRITE_DRIVER_NAME}, ErrorContext, YouRAMResult};
 use super::PdkError;
@@ -20,7 +20,7 @@ impl PdkCells {
         let mut logicgates = HashMap::new();
         let mut dffs = HashMap::new();
         for cell in library.cells.iter() {
-            if let Some(dff) = Self::extract_dff(cell, &stdcell_spice) {
+            if let Some(dff) = Self::extract_dff(cell, &stdcell_spice).context("extract dff")? {
                 let key = dff.drive_strength;
                 dffs.insert(key, Shr::new(dff));
             } else if let Some(logicgate) = Self::extract_logicgate(cell, &stdcell_spice) {
@@ -154,16 +154,22 @@ impl PdkCells {
 }
 
 impl PdkCells {
-    pub fn extract_dff(cell: &LibCell, spice: &Spice) -> Option<Dff> {
+    pub fn extract_dff(cell: &LibCell, spice: &Spice) -> Result<Option<Dff>, PdkError> {
         // ff exit?
-        let ff = cell.ff.as_ref()?;
+        let ff = match cell.ff.as_ref() {
+            Some(ff) => ff,
+            None => return Ok(None),
+        };
+
         // TODO: better way to check (din, clk, q, qn)
         if cell.input_pins().count() == 2 && cell.output_pins().count() == 2 {
             let subckt = spice.subckts.iter()
-                .find(|s| s.name == cell.name)?
+                .find(|s| s.name == cell.name)
+                .ok_or_else(|| PdkError::CellNotFoundInSpiceFile(cell.name.to_string()))?
                 .clone();
 
-            let drive_strength = DriveStrength::try_from_cell(cell)?;
+            let drive_strength = DriveStrength::try_from_cell(cell)
+                .ok_or_else(|| PdkError::CanNotGetDriverStrenghtInCell(cell.name.to_string()))?;
 
             let mut ports = vec![];
             let mut din_port_index = None;
@@ -172,6 +178,9 @@ impl PdkCells {
             let mut qn_port_index = None;
             let mut vdd_port_index = None;
             let mut gnd_port_index = None;
+            let mut hold_rising_timing = None;
+            let mut setup_rising_timing = None;
+
             for (port_index, port_name) in subckt.ports.iter().enumerate() {
                 if let Some(pin) = cell.get_pin(&port_name) {
                     let direction = match pin.direction {
@@ -180,11 +189,25 @@ impl PdkCells {
                                 clk_port_index = Some(port_index);
                             } else {
                                 din_port_index = Some(port_index);
+                                // find input pin , get setup and hold 
+                                for timing in pin.timings.iter() {
+                                    // TODO: Rising / Falling
+                                    match timing.timing_type {
+                                        Some(LibTimingType::HoldRising) => {
+                                            hold_rising_timing = Some(timing.clone());
+                                        }
+                                        Some(LibTimingType::SetupRising) => {
+                                            setup_rising_timing = Some(timing.clone());
+                                        }
+                                        _ => {
+                                        }
+                                    }
+                                }
                             }
                             PortDirection::Input
                         }
                         LibPinDirection::Output => {
-                            let function = pin.function.as_ref()?;
+                            let function = pin.function.as_ref().ok_or_else(|| PdkError::ExpectAttrButNotFound("function"))?;
                             if let LibExpr::Var(name) = function {
                                 if name.as_str() == ff.names[0].as_str() {
                                     q_port_index = Some(port_index);
@@ -202,36 +225,36 @@ impl PdkCells {
                     };
                     ports.push(Port::new(port_name.clone(), direction));
                 } else if let Some(pg_pin) = cell.get_pg_pin(&port_name) {
-                    let name = pg_pin.voltage_name.to_lowercase();
-                    match name.as_str() {
-                        "vdd" => {
+                    match pg_pin.pg_type {
+                        LibPgType::PrimaryPower => {
                             vdd_port_index = Some(port_index);
                             ports.push(Port::new(port_name.clone(), PortDirection::Vdd));
                         }
-                        "gnd" | "vss" => {
+                        LibPgType::PrimaryGround => {
                             gnd_port_index = Some(port_index);
                             ports.push(Port::new(port_name.clone(), PortDirection::Gnd));
                         }
-                        // _ => return Err(PdkError::UnkownPgPinName(name))?,
-                        _ => return None,
-                    };
+                        _ => return Ok(None),
+                    }
                 }
             }
 
-            Some(Dff {
+            Ok(Some(Dff {
                 name: cell.name.clone().into(),
                 drive_strength,
                 ports,
-                din_port_index: din_port_index?,
-                clk_port_index: clk_port_index?,
-                q_port_index: q_port_index?,
-                qn_port_index: qn_port_index?,
-                vdd_port_index: vdd_port_index?,
-                gnd_port_index: gnd_port_index?,
+                din_port_index: din_port_index.ok_or_else(|| PdkError::LackPort("din"))?,
+                clk_port_index: clk_port_index.ok_or_else(|| PdkError::LackPort("clk"))?,
+                q_port_index: q_port_index.ok_or_else(|| PdkError::LackPort("q"))?,
+                qn_port_index: qn_port_index.ok_or_else(|| PdkError::LackPort("qn"))?,
+                vdd_port_index: vdd_port_index.ok_or_else(|| PdkError::LackPort("vdd"))?,
+                gnd_port_index: gnd_port_index.ok_or_else(|| PdkError::LackPort("gnd"))?,
+                hold_rising_timing: hold_rising_timing.ok_or_else(|| PdkError::ExpectAttrButNotFound("setup_rising_timing"))?,
+                setup_rising_timing: setup_rising_timing.ok_or_else(|| PdkError::ExpectAttrButNotFound("setup_rising_timing"))?,
                 netlist: subckt,
-            })
+            }))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -272,20 +295,17 @@ impl PdkCells {
                 };
                 ports.push(Port::new(port_name.clone(), direction));
             } else if let Some(pg_pin) = cell.get_pg_pin(&port_name) {
-                // TODO: use voltage_name to regc vdd/gnd
-                let name = pg_pin.voltage_name.to_lowercase();
-                match name.as_str() {
-                    "vdd" => {
+                match pg_pin.pg_type {
+                    LibPgType::PrimaryPower => {
                         vdd_port_index = Some(port_index);
                         ports.push(Port::new(port_name.clone(), PortDirection::Vdd));
                     }
-                    "gnd" | "vss" => {
+                    LibPgType::PrimaryGround => {
                         gnd_port_index = Some(port_index);
                         ports.push(Port::new(port_name.clone(), PortDirection::Gnd));
                     }
-                    // _ => return Err(PdkError::UnkownPgPinName(name))?,
                     _ => return None,
-                };
+                }
             }
         }
 

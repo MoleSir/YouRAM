@@ -1,8 +1,8 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
 use rand::Rng;
 use reda_unit::{t, v, Number, Time, Voltage};
 use tracing::warn;
-use crate::{circuit::{Shr, ShrString, Sram}, pdk::{Enviroment, Pdk}, simulate::{CircuitSimulator, ExecuteCommand, Meas}, YouRAMResult};
+use crate::{circuit::{Shr, ShrString, Sram}, export, pdk::{Enviroment, Pdk}, simulate::{CircuitSimulator, Meas, SpiceCommand}, ErrorContext, YouRAMResult};
 pub type Bits = Vec<bool>;
 
 pub enum SramTransaction {
@@ -68,11 +68,22 @@ impl SramTransactionGenerator {
         self,
         env: Enviroment,
         pdk: Arc<Pdk>,
-        execute: impl ExecuteCommand,
-        simulate_path: impl AsRef<Path>,
-        circuit_path: impl AsRef<Path>, 
+        command: &impl SpiceCommand,
+        simulate_path: impl Into<PathBuf>,
+        circuit_path: Option<impl Into<PathBuf>>, 
         temp_folder: impl AsRef<Path>,
     ) -> YouRAMResult<HashMap<String, Number>>  {
+        // write sram if need
+        let temp_folder = temp_folder.as_ref();
+        let circuit_path = match circuit_path {
+            Some(circuit_path) => circuit_path.into(),
+            None => {
+                let circuit_path = temp_folder.join(self.sram.read().name.to_string());
+                export::write_spice(self.sram.clone(), &circuit_path).with_context(|| format!("write sram"))?;
+                circuit_path
+            }
+        };
+
         let mut simulator = CircuitSimulator::create(self.sram.clone(), env, pdk, simulate_path, circuit_path)?;
     
         // transform logic transactions to real voltages values
@@ -135,7 +146,7 @@ impl SramTransactionGenerator {
         simulator.write_trans(t!(10 p), 0.0, end_time)?;
 
         // run simulate
-        simulator.simulate(execute, temp_folder)
+        simulator.simulate(command, temp_folder)
     }
 
     pub fn add_random_write_transaction(&mut self) -> bool {
@@ -187,6 +198,14 @@ impl SramTransactionGenerator {
 
     pub fn clock_rise_time(&self, clock_index: usize) -> Time {
         clock_index as f64 * self.period + self.period / 2.
+    }
+
+    pub fn last_clock_rise_time(&self) -> Time {
+        self.clock_rise_time(self.transactions.len() - 1)
+    }
+
+    pub fn half_period(&self) -> Time {
+        self.period / 2.0
     }
 
     pub fn clock_begin(&self, clock_index: usize) -> Time {

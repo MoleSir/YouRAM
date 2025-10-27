@@ -14,9 +14,9 @@ pub struct SpiceWritor {
 }
 
 impl SpiceWritor {
-    pub fn open<P: AsRef<Path>>(simulate_path: P) -> YouRAMResult<Self> {
-        let simulate_path = simulate_path.as_ref();
-        let file = File::create(simulate_path)?;
+    pub fn open<P: Into<PathBuf>>(simulate_path: P) -> YouRAMResult<Self> {
+        let simulate_path = simulate_path.into();
+        let file = File::create(&simulate_path)?;
         Ok(Self {
             simulate_path: simulate_path.to_path_buf(),
             file,
@@ -35,6 +35,10 @@ impl SpiceWritor {
 
 #[allow(dead_code)]
 impl SpiceWritor {
+    pub fn simulate_path(&self) -> &Path {
+        &self.simulate_path
+    }
+
     pub fn write_content(&mut self, content: impl AsRef<str>) -> YouRAMResult<()> {
         write!(self.file, "{}", content.as_ref())?;
         Ok(())
@@ -56,7 +60,8 @@ impl SpiceWritor {
     }
 
     pub fn write_temperature(&mut self, temp: impl Into<Temperature>) -> YouRAMResult<()> {
-        writeln!(self.file, ".TEMP {}", temp.into())?;
+        let temp: Temperature = temp.into();
+        writeln!(self.file, ".TEMP {}", temp.value())?;
         Ok(())
     }
 
